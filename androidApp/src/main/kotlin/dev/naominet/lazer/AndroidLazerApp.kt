@@ -2,11 +2,11 @@ package dev.naominet.lazer
 
 import android.app.Activity
 import android.content.res.Configuration
-import android.graphics.BitmapFactory
 import android.os.Build
-import android.util.Base64
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -21,18 +21,21 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -45,7 +48,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
@@ -53,58 +55,69 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.FileUpload
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.material.icons.outlined.Album
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.ColorLens
 import androidx.compose.material.icons.outlined.DarkMode
-import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.FolderSpecial
 import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Lyrics
-import androidx.compose.material.icons.outlined.MyLocation
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Smartphone
+import androidx.compose.material.icons.outlined.SortByAlpha
+import androidx.compose.material.icons.outlined.Translate
+import androidx.compose.material.icons.outlined.WaterDrop
+import androidx.compose.material.icons.outlined.Widgets
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -116,15 +129,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
@@ -138,15 +150,39 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.core.view.WindowCompat
 import coil3.compose.AsyncImage
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.sp
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.LayerBackdrop as KyantLayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop as kyantLayerBackdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop as kyantRememberCombinedBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop as kyantRememberLayerBackdrop
+import dev.naominet.lazer.core.GlassStyleStore
+import dev.naominet.lazer.core.InternalMusicLibrary
+import dev.naominet.lazer.core.WifiTransferServer
+import dev.naominet.lazer.ui.glass.GlassBackground
+import dev.naominet.lazer.ui.glass.LiquidBottomTab
+import dev.naominet.lazer.ui.glass.LiquidBottomTabs
+import dev.naominet.lazer.ui.glass.LiquidButton
+import dev.naominet.lazer.ui.glass.LiquidGlassSegmentedControl
+import dev.naominet.lazer.ui.glass.LiquidSlider
+import dev.naominet.lazer.ui.glass.glassCard
+import dev.naominet.lazer.ui.glass.glassRow
+import dev.naominet.lazer.ui.glass.glassTile
+import dev.naominet.lazer.ui.glass.rememberPageBackdrop
+import dev.naominet.lazer.ui.theme.GlassTheme
+import dev.naominet.lazer.ui.theme.LocalGlassPalette
 import com.kashif_e.backdrop.backdrops.layerBackdrop
 import com.kashif_e.backdrop.backdrops.rememberCombinedBackdrop
 import com.kashif_e.backdrop.backdrops.rememberLayerBackdrop
@@ -156,10 +192,6 @@ import com.kashif_e.backdrop.effects.lens
 import com.kashif_e.backdrop.effects.vibrancy
 import com.kashif_e.backdrop.highlight.Highlight
 import com.kashif_e.backdrop.shadow.InnerShadow
-import dev.naominet.lazer.gateway.AudioQuality
-import dev.naominet.lazer.gateway.DEFAULT_GATEWAY_BASE_URL
-import dev.naominet.lazer.gateway.normalizeGatewayBaseUrl
-import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button as MiuixButton
 import top.yukonga.miuix.kmp.basic.ButtonColors as MiuixButtonColors
 import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
@@ -177,28 +209,14 @@ private val LazerMotionEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 // floating liquid-glass bottom controls.
 private val LocalAndroidContentBottomInset = compositionLocalOf { 0.dp }
 
-private enum class AndroidMainPageKind(val depth: Int) {
-    ROOT(0),
-    PLAYLIST(1),
-    SETTINGS(1),
-}
-
-private data class AndroidMainPage(
-    val kind: AndroidMainPageKind,
-    val playlist: AndroidPlaylist? = null,
-    val tracks: List<AndroidTrack> = emptyList(),
-    val isLoading: Boolean = false,
-) {
-    val contentKey: Any
-        get() = if (kind == AndroidMainPageKind.PLAYLIST) kind to playlist?.id else kind
-}
-
 private enum class AndroidBackLayer {
-    PLAYLIST,
-    SETTINGS,
     PLAYER,
     LYRICS,
 }
+
+/** Backdrop layers of the glass stage; only provided under the glass skin. */
+private class GlassEnv(val page: KyantLayerBackdrop, val content: KyantLayerBackdrop, val scrim: Backdrop)
+private val LocalGlassEnv = compositionLocalOf<GlassEnv?> { null }
 
 private fun Modifier.predictiveBackTransform(
     enabled: Boolean,
@@ -297,7 +315,23 @@ private fun SettingsCard(
 ) {
     val colors = MaterialTheme.colorScheme
     val uiAlpha = LocalLazerUiAlpha.current
-    if (LocalLazerThemeEngine.current == LazerThemeEngine.MIUIX) {
+    val glassEnv = LocalGlassEnv.current
+    // Settings cards live inside a scrolling LazyColumn; drawBackdrop glass draws its rim
+    // relative to stale scroll positions there (borders and touch targets drift apart),
+    // so the glass skin renders them as solid iOS-style cards instead.
+    if (glassEnv != null) {
+        CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides colors.onSurface) {
+            Surface(
+                modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)),
+                shape = RoundedCornerShape(22.dp),
+                color = Color.White,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                shadowElevation = 1.dp,
+            ) {
+                content()
+            }
+        }
+    } else if (LocalLazerThemeEngine.current == LazerThemeEngine.MIUIX) {
         CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides colors.onSurface) {
             MiuixCard(
                 modifier = modifier.fillMaxWidth(),
@@ -336,7 +370,7 @@ private fun ExperimentalBadge() {
 @Composable
 fun AndroidLazerApp() {
     val context = LocalContext.current
-    val controller = remember(context.applicationContext) { AndroidGatewayController(context.applicationContext) }
+    val controller = remember(context.applicationContext) { AndroidLibraryController(context.applicationContext) }
     val playback by AndroidPlaybackConnection.snapshot.collectAsState()
     var playerVisible by remember { mutableStateOf(false) }
     var lyricsVisible by remember { mutableStateOf(false) }
@@ -348,8 +382,6 @@ fun AndroidLazerApp() {
     val activeBackLayer = when {
         lyricsVisible -> AndroidBackLayer.LYRICS
         playerVisible -> AndroidBackLayer.PLAYER
-        controller.isSettingsVisible -> AndroidBackLayer.SETTINGS
-        controller.activePlaylist != null -> AndroidBackLayer.PLAYLIST
         else -> null
     }
     val renderedBackProgress by animateFloatAsState(
@@ -368,11 +400,16 @@ fun AndroidLazerApp() {
     DisposableEffect(controller) {
         onDispose { controller.close() }
     }
-    LaunchedEffect(playback.track?.id) { playback.track?.id?.let(controller::loadLyrics) }
+    LaunchedEffect(playback.track?.id) {
+        playback.track?.let { track ->
+            controller.onPlaybackTrackChanged(track)
+            controller.loadLyrics(track)
+        }
+    }
 
     // The currently visible top layer owns back. Gesture progress drives the same page that a
     // normal back press closes; cancelling the gesture eases that page back into place.
-    PredictiveBackHandler(enabled = !controller.isLoginVisible && activeBackLayer != null) { events ->
+    PredictiveBackHandler(enabled = activeBackLayer != null) { events ->
         val layer = activeBackLayer ?: return@PredictiveBackHandler
         transformedBackLayer = layer
         isPredictiveBackRunning = true
@@ -384,8 +421,6 @@ fun AndroidLazerApp() {
             when (layer) {
                 AndroidBackLayer.LYRICS -> lyricsVisible = false
                 AndroidBackLayer.PLAYER -> playerVisible = false
-                AndroidBackLayer.SETTINGS -> controller.closeSettings()
-                AndroidBackLayer.PLAYLIST -> controller.closePlaylist()
             }
         } finally {
             isPredictiveBackRunning = false
@@ -393,16 +428,6 @@ fun AndroidLazerApp() {
         }
     }
 
-    val mainPage = when {
-        controller.isSettingsVisible -> AndroidMainPage(AndroidMainPageKind.SETTINGS)
-        controller.activePlaylist != null -> AndroidMainPage(
-            kind = AndroidMainPageKind.PLAYLIST,
-            playlist = controller.activePlaylist,
-            tracks = controller.activePlaylistTracks,
-            isLoading = controller.isPlaylistLoading,
-        )
-        else -> AndroidMainPage(AndroidMainPageKind.ROOT)
-    }
     val systemConfiguration = LocalConfiguration.current
     val paletteColorScheme = remember(
         controller.palette,
@@ -420,6 +445,169 @@ fun AndroidLazerApp() {
         }
     }
 
+    val isGlass = controller.skin == AppSkin.GLASS
+    val playFromQueue: (List<AndroidTrack>, AndroidTrack) -> Unit = { queue, track ->
+        AndroidPlaybackConnection.play(context, queue, track)
+    }
+    val overlays: @Composable BoxScope.() -> Unit = {
+        controller.message?.let { text ->
+            MessageBanner(text, Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(16.dp))
+        }
+        AnimatedVisibility(
+            visible = playerVisible && playback.track != null,
+            modifier = Modifier.fillMaxSize(),
+            enter = slideInVertically(
+                animationSpec = tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing),
+                initialOffsetY = { height -> height / 8 },
+            ) + fadeIn(tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing)),
+            exit = slideOutVertically(
+                animationSpec = tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing),
+                targetOffsetY = { height -> height / 8 },
+            ) + fadeOut(tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing)),
+            label = "now-playing-page",
+        ) {
+            NowPlayingPage(
+                snapshot = playback,
+                lyricLines = controller.lyrics,
+                lyricsLoading = controller.lyricsLoading,
+                lyricsMessage = controller.lyricsMessage,
+                lyricFollowDelayMillis = controller.lyricFollowDelayMillis,
+                lyricAnimationSpeed = controller.lyricAnimationSpeed,
+                wordLyricsEnabled = controller.wordLyricsEnabled,
+                lyricGlowEnabled = controller.lyricGlowEnabled,
+                liquidGlassEnabled = controller.liquidGlassEnabled,
+                lyricFontSizeSp = controller.lyricFontSizeSp,
+                showFullLyrics = controller.showFullLyrics,
+                isLiked = playback.track?.let { controller.isSongLiked(it.id) } == true,
+                onToggleLiked = { playback.track?.let(controller::toggleSongLiked) },
+                onDismiss = { playerVisible = false },
+                onToggle = { AndroidPlaybackConnection.toggle(context) },
+                onPrevious = { AndroidPlaybackConnection.previous(context) },
+                onNext = { AndroidPlaybackConnection.next(context) },
+                onSeek = { AndroidPlaybackConnection.seekTo(context, it) },
+                onLyrics = { lyricsVisible = true },
+                glass = isGlass,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .predictiveBackTransform(
+                        enabled = transformedBackLayer == AndroidBackLayer.PLAYER,
+                        progress = renderedBackProgress,
+                        swipeEdge = backSwipeEdge,
+                    ),
+            )
+        }
+        AnimatedVisibility(
+            visible = lyricsVisible && playback.track != null,
+            modifier = Modifier.fillMaxSize(),
+            enter = slideInHorizontally(
+                animationSpec = tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing),
+                initialOffsetX = { width -> width / 5 },
+            ) + fadeIn(tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing)),
+            exit = slideOutHorizontally(
+                animationSpec = tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing),
+                targetOffsetX = { width -> width / 5 },
+            ) + fadeOut(tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing)),
+            label = "lyrics-page",
+        ) {
+            AndroidLyricsPage(
+                track = playback.track,
+                lines = controller.lyrics,
+                isLoading = controller.lyricsLoading,
+                message = controller.lyricsMessage,
+                positionMillis = playback.positionMillis,
+                followDelayMillis = controller.lyricFollowDelayMillis,
+                animationSpeed = controller.lyricAnimationSpeed,
+                wordLyricsEnabled = controller.wordLyricsEnabled,
+                lyricGlowEnabled = controller.lyricGlowEnabled,
+                lyricFontSizeSp = controller.lyricFontSizeSp,
+                showFullLyrics = controller.showFullLyrics,
+                onBack = { lyricsVisible = false },
+                onSeek = { AndroidPlaybackConnection.seekTo(context, it) },
+                useGlassBackground = isGlass,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .predictiveBackTransform(
+                        enabled = transformedBackLayer == AndroidBackLayer.LYRICS,
+                        progress = renderedBackProgress,
+                        swipeEdge = backSwipeEdge,
+                    ),
+            )
+        }
+        if ((context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            // Top-end, just below the header row, so it never overlaps the bottom controls.
+            DebugWatermark(
+                enabled = true,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(top = 54.dp, end = 14.dp),
+            )
+        }
+    }
+    if (isGlass) {
+        // Pure white stage, always: light palette + solid white background, regardless of
+        // system theme — that is the glass skin's identity.
+        GlassTheme(darkTheme = false, amoled = false) {
+            // VibeUsage layering: page orbs backdrop -> captured content layer -> floating glass
+            // (mini player / bottom tabs) samples the combined scrim so scrolling content blurs
+            // live behind it. Content-layer glass must only ever sample the page backdrop.
+            val pageBackdrop = rememberPageBackdrop()
+            val contentBackdrop = kyantRememberLayerBackdrop()
+            val scrimBackdrop = kyantRememberCombinedBackdrop(pageBackdrop, contentBackdrop)
+            CompositionLocalProvider(
+                LocalGlassEnv provides GlassEnv(pageBackdrop, contentBackdrop, scrimBackdrop),
+                LocalAndroidContentBottomInset provides ((if (playback.track != null) 76.dp else 0.dp) + 116.dp),
+            ) {
+                Box(Modifier.fillMaxSize()) {
+                    GlassBackground(pageBackdrop)
+                    Box(Modifier.fillMaxSize().kyantLayerBackdrop(contentBackdrop)) {
+                        AndroidRootContent(
+                            controller = controller,
+                            currentTrackId = playback.track?.id,
+                            onPlay = playFromQueue,
+                            isPlaying = playback.isPlaying,
+                            modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                        )
+                    }
+                    Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+                        playback.track?.let { track ->
+                            GlassMiniPlayer(
+                                track = track,
+                                isPlaying = playback.isPlaying,
+                                isPreparing = playback.isPreparing,
+                                backdrop = scrimBackdrop,
+                                onOpen = { playerVisible = true },
+                                onToggle = { AndroidPlaybackConnection.toggle(context) },
+                            )
+                        }
+                        Box(
+                            Modifier
+                                .padding(start = 16.dp, end = 16.dp)
+                                .padding(bottom = navigationBarBottomInset() + 14.dp),
+                        ) {
+                            LiquidBottomTabs(
+                                selectedTabIndex = { controller.destination.ordinal },
+                                onTabSelected = { index ->
+                                    controller.selectDestination(AndroidRootDestination.entries[index])
+                                },
+                                backdrop = scrimBackdrop,
+                                tabsCount = AndroidRootDestination.entries.size,
+                            ) {
+                                AndroidRootDestination.entries.forEach { destination ->
+                                    LiquidBottomTab({ controller.selectDestination(destination) }) {
+                                        Icon(destination.icon(), null, Modifier.size(22.dp), tint = LocalGlassPalette.current.InkHi)
+                                        Text(destination.label, style = TextStyle(LocalGlassPalette.current.InkHi, 11.sp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    overlays()
+                }
+            }
+        }
+        return
+    }
     LazerTheme(
         isDark = controller.isDark,
         colorScheme = paletteColorScheme,
@@ -427,10 +615,6 @@ fun AndroidLazerApp() {
     ) {
         val colors = MaterialTheme.colorScheme
         val view = LocalView.current
-        val playFromQueue: (List<AndroidTrack>, AndroidTrack) -> Unit = { queue, track ->
-            AndroidPlaybackConnection.play(context, queue, track)
-            playerVisible = true
-        }
         if (!view.isInEditMode) {
             SideEffect {
                 (view.context as? Activity)?.window?.let { window ->
@@ -490,78 +674,12 @@ fun AndroidLazerApp() {
                         .background(colors.background.copy(alpha = uiAlpha)),
                 )
                 Box(Modifier.weight(1f)) {
-                    if (
-                        transformedBackLayer == AndroidBackLayer.PLAYLIST ||
-                        transformedBackLayer == AndroidBackLayer.SETTINGS
-                    ) {
-                        AndroidRootContent(
-                            controller = controller,
-                            currentTrackId = playback.track?.id,
-                            onPlay = playFromQueue,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                    AnimatedContent(
-                        targetState = mainPage,
+                    AndroidRootContent(
+                        controller = controller,
+                        currentTrackId = playback.track?.id,
+                        onPlay = playFromQueue,
                         modifier = Modifier.fillMaxSize(),
-                        transitionSpec = {
-                            val movesForward = targetState.kind.depth > initialState.kind.depth
-                            val enter = slideInHorizontally(
-                                animationSpec = tween(
-                                    durationMillis = PAGE_TRANSITION_MILLIS,
-                                    easing = LazerMotionEasing,
-                                ),
-                                initialOffsetX = { width -> if (movesForward) width / 5 else -width / 5 },
-                            ) + fadeIn(tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing))
-                            val exit = slideOutHorizontally(
-                                animationSpec = tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing),
-                                targetOffsetX = { width -> if (movesForward) -width / 8 else width / 8 },
-                            ) + fadeOut(tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing))
-                            (enter togetherWith exit).apply {
-                                targetContentZIndex = if (movesForward) 1f else -1f
-                            }
-                        },
-                        contentKey = AndroidMainPage::contentKey,
-                        label = "android-main-page",
-                    ) { page ->
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .predictiveBackTransform(
-                                    enabled = when (page.kind) {
-                                        AndroidMainPageKind.PLAYLIST -> transformedBackLayer == AndroidBackLayer.PLAYLIST
-                                        AndroidMainPageKind.SETTINGS -> transformedBackLayer == AndroidBackLayer.SETTINGS
-                                        AndroidMainPageKind.ROOT -> false
-                                    },
-                                    progress = renderedBackProgress,
-                                    swipeEdge = backSwipeEdge,
-                                ),
-                            // Each page carries its own scrim so its background accompanies the page
-                            // through a transition (occluding the page behind it). The global scrim
-                            // behind fills the area a moving page uncovers.
-                            color = colors.background.copy(alpha = uiAlpha),
-                        ) {
-                            when (page.kind) {
-                                AndroidMainPageKind.SETTINGS -> SettingsPage(controller)
-                                AndroidMainPageKind.PLAYLIST -> page.playlist?.let { playlist ->
-                                    PlaylistDetail(
-                                        playlist = playlist,
-                                        tracks = page.tracks,
-                                        isLoading = page.isLoading,
-                                        currentId = playback.track?.id,
-                                        onBack = controller::closePlaylist,
-                                        onPlay = { track -> playFromQueue(page.tracks, track) },
-                                    )
-                                }
-                                AndroidMainPageKind.ROOT -> AndroidRootContent(
-                                    controller = controller,
-                                    currentTrackId = playback.track?.id,
-                                    onPlay = playFromQueue,
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-                            }
-                        }
-                    }
+                    )
                 }
                 if (!liquidGlass.isEnabled) {
                     playback.track?.let { track ->
@@ -592,107 +710,26 @@ fun AndroidLazerApp() {
                 }
             }
 
-            controller.message?.let { text -> MessageBanner(text, Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(16.dp)) }
-            AnimatedVisibility(
-                visible = playerVisible && playback.track != null,
-                modifier = Modifier.fillMaxSize(),
-                enter = slideInVertically(
-                    animationSpec = tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing),
-                    initialOffsetY = { height -> height / 8 },
-                ) + fadeIn(tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing)),
-                exit = slideOutVertically(
-                    animationSpec = tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing),
-                    targetOffsetY = { height -> height / 8 },
-                ) + fadeOut(tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing)),
-                label = "now-playing-page",
-            ) {
-                NowPlayingPage(
-                    snapshot = playback,
-                    lyricLines = controller.lyrics,
-                    lyricsLoading = controller.lyricsLoading,
-                    lyricsMessage = controller.lyricsMessage,
-                    lyricFollowDelayMillis = controller.lyricFollowDelayMillis,
-                    lyricAnimationSpeed = controller.lyricAnimationSpeed,
-                    wordLyricsEnabled = controller.wordLyricsEnabled,
-                    lyricGlowEnabled = controller.lyricGlowEnabled,
-                    liquidGlassEnabled = controller.liquidGlassEnabled,
-                    lyricFontSizeSp = controller.lyricFontSizeSp,
-                    showFullLyrics = controller.showFullLyrics,
-                    isLiked = playback.track?.let { controller.isSongLiked(it.id) } == true,
-                    onToggleLiked = { playback.track?.let(controller::toggleSongLiked) },
-                    onDismiss = { playerVisible = false },
-                    onToggle = { AndroidPlaybackConnection.toggle(context) },
-                    onPrevious = { AndroidPlaybackConnection.previous(context) },
-                    onNext = { AndroidPlaybackConnection.next(context) },
-                    onSeek = { AndroidPlaybackConnection.seekTo(context, it) },
-                    onLyrics = { lyricsVisible = true },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .predictiveBackTransform(
-                            enabled = transformedBackLayer == AndroidBackLayer.PLAYER,
-                            progress = renderedBackProgress,
-                            swipeEdge = backSwipeEdge,
-                        ),
-                )
-            }
-            AnimatedVisibility(
-                visible = lyricsVisible && playback.track != null,
-                modifier = Modifier.fillMaxSize(),
-                enter = slideInHorizontally(
-                    animationSpec = tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing),
-                    initialOffsetX = { width -> width / 5 },
-                ) + fadeIn(tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing)),
-                exit = slideOutHorizontally(
-                    animationSpec = tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing),
-                    targetOffsetX = { width -> width / 5 },
-                ) + fadeOut(tween(PAGE_TRANSITION_MILLIS, easing = LazerMotionEasing)),
-                label = "lyrics-page",
-            ) {
-                AndroidLyricsPage(
-                    track = playback.track,
-                    lines = controller.lyrics,
-                    isLoading = controller.lyricsLoading,
-                    message = controller.lyricsMessage,
-                    positionMillis = playback.positionMillis,
-                    followDelayMillis = controller.lyricFollowDelayMillis,
-                    animationSpeed = controller.lyricAnimationSpeed,
-                    wordLyricsEnabled = controller.wordLyricsEnabled,
-                    lyricGlowEnabled = controller.lyricGlowEnabled,
-                    lyricFontSizeSp = controller.lyricFontSizeSp,
-                    showFullLyrics = controller.showFullLyrics,
-                    onBack = { lyricsVisible = false },
-                    onSeek = { AndroidPlaybackConnection.seekTo(context, it) },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .predictiveBackTransform(
-                            enabled = transformedBackLayer == AndroidBackLayer.LYRICS,
-                            progress = renderedBackProgress,
-                            swipeEdge = backSwipeEdge,
-                        ),
-                )
-            }
-            if (controller.isLoginVisible) LoginSheet(controller)
-            if ((context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
-                // Top-end, just below the header row, so it never overlaps the bottom controls.
-                DebugWatermark(
-                    enabled = true,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .statusBarsPadding()
-                        .padding(top = 54.dp, end = 14.dp),
-                )
-            }
+            overlays()
         }
     }
 }
 
 @Composable
 private fun AndroidRootContent(
-    controller: AndroidGatewayController,
+    controller: AndroidLibraryController,
     currentTrackId: Long?,
     onPlay: (List<AndroidTrack>, AndroidTrack) -> Unit,
+    isPlaying: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    val fileImportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris -> controller.importFromUris(uris) }
+    var wifiSheetVisible by remember { mutableStateOf(false) }
+    var webdavSheetVisible by remember { mutableStateOf(false) }
+    var importOptionsVisible by remember { mutableStateOf(false) }
+
     Column(modifier) {
         MobileHeader(
             controller = controller,
@@ -716,67 +753,196 @@ private fun AndroidRootContent(
             label = "android-root",
         ) { destination ->
             when (destination) {
-                AndroidRootDestination.HOME -> HomePage(controller, currentTrackId) { track ->
-                    onPlay(controller.homeTracks, track)
-                }
-                AndroidRootDestination.DISCOVER -> DiscoverPage(controller, currentTrackId) { track ->
-                    onPlay(controller.homeTracks, track)
-                }
-                AndroidRootDestination.SEARCH -> SearchPage(controller, currentTrackId) { track ->
-                    onPlay(controller.searchResults, track)
-                }
-                AndroidRootDestination.LIBRARY -> LibraryPage(controller, currentTrackId) { track ->
-                    onPlay(controller.homeTracks, track)
-                }
-                AndroidRootDestination.ME -> MePage(controller)
+                AndroidRootDestination.LIBRARY -> LibraryPage(
+                    controller = controller,
+                    currentId = currentTrackId,
+                    isPlaying = isPlaying,
+                    onPlay = { queue, track -> onPlay(queue, track) },
+                    onOpenImport = { importOptionsVisible = true },
+                    onSelectFiles = { fileImportLauncher.launch(arrayOf("audio/*", "*/*")) },
+                    onSelectWifi = { wifiSheetVisible = true },
+                    onSelectWebdav = { webdavSheetVisible = true },
+                )
+                AndroidRootDestination.SEARCH -> SearchPage(
+                    controller,
+                    currentTrackId,
+                    isPlaying = isPlaying,
+                    onPlay = { queue, track -> onPlay(queue, track) },
+                )
+                AndroidRootDestination.SETTINGS -> SettingsPage(
+                    controller = controller,
+                    onOpenImport = { importOptionsVisible = true },
+                )
             }
         }
+    }
+
+    if (importOptionsVisible) {
+        ImportOptionsSheet(
+            onSelectFiles = { fileImportLauncher.launch(arrayOf("audio/*", "*/*")) },
+            onSelectWifi = { wifiSheetVisible = true },
+            onSelectWebdav = { webdavSheetVisible = true },
+            onDismiss = { importOptionsVisible = false },
+        )
+    }
+    if (wifiSheetVisible) {
+        WifiImportSheet(controller, onDismiss = { wifiSheetVisible = false })
+    }
+    if (webdavSheetVisible) {
+        WebDavSheet(controller, onDismiss = { webdavSheetVisible = false })
     }
 }
 
 @Composable
-private fun HomePage(controller: AndroidGatewayController, currentId: Long?, onPlay: (AndroidTrack) -> Unit) {
+private fun LibraryPage(
+    controller: AndroidLibraryController,
+    currentId: Long?,
+    onPlay: (List<AndroidTrack>, AndroidTrack) -> Unit,
+    onOpenImport: () -> Unit,
+    onSelectFiles: () -> Unit,
+    onSelectWifi: () -> Unit,
+    onSelectWebdav: () -> Unit,
+    isPlaying: Boolean = false,
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp, 12.dp, 20.dp, 18.dp + LocalAndroidContentBottomInset.current),
-        verticalArrangement = Arrangement.spacedBy(22.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            SectionTitle(tr("home.section.title"), if (controller.isSignedIn) tr("home.section.signed") else tr("home.section.anon"))
-            Spacer(Modifier.height(12.dp))
-            PlaylistStrip(controller.featuredPlaylists, controller::openPlaylist)
+            val colors = MaterialTheme.colorScheme
+            Row(
+                Modifier.widthIn(max = 470.dp).fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(tr("library.title"), style = MaterialTheme.typography.displaySmall)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        if (controller.internalTracks.isEmpty()) tr("library.subtitle") else tr("library.count", controller.internalTracks.size),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Surface(
+                    onClick = onOpenImport,
+                    shape = RoundedCornerShape(20.dp),
+                    color = colors.primary,
+                    shadowElevation = 2.dp,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.FileUpload,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = colors.onPrimary,
+                        )
+                        Spacer(Modifier.width(5.dp))
+                        Text(
+                            text = tr("internal.import"),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.onPrimary,
+                        )
+                    }
+                }
+            }
         }
-        item { SectionTitle(if (controller.isSignedIn) tr("home.daily") else tr("home.flowing")) }
+        item {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                AndroidLibraryFilter.entries.forEach { filter ->
+                    ThemeTextButton(onClick = { controller.updateLibraryFilter(filter) }) {
+                        Text(
+                            filter.label,
+                            color = if (controller.libraryFilter == filter) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            fontWeight = if (controller.libraryFilter == filter) FontWeight.SemiBold else FontWeight.Normal,
+                        )
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                SettingsDropdown(
+                    options = AndroidLibrarySort.entries,
+                    selected = controller.librarySort,
+                    label = AndroidLibrarySort::label,
+                    onSelected = controller::updateLibrarySort,
+                    icon = AndroidLibrarySort::icon,
+                )
+            }
+        }
         when {
-            controller.isLoading && controller.homeTracks.isEmpty() -> item { QuietState(tr("home.preparing")) }
-            controller.homeTracks.isEmpty() -> item { QuietState(tr("home.empty")) }
-            else -> items(controller.homeTracks, key = AndroidTrack::id) { TrackRow(it, it.id == currentId) { onPlay(it) } }
-        }
-    }
-}
-
-@Composable
-private fun DiscoverPage(controller: AndroidGatewayController, currentId: Long?, onPlay: (AndroidTrack) -> Unit) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp, 12.dp, 20.dp, 18.dp + LocalAndroidContentBottomInset.current),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        item {
-            Column(Modifier.widthIn(max = 470.dp)) {
-                Text(tr("discover.title"), style = MaterialTheme.typography.displaySmall)
-                Spacer(Modifier.height(6.dp))
-                Text(tr("discover.sub"), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            controller.isInternalScanning && controller.internalTracks.isEmpty() ->
+                item { QuietState(tr("library.scanning")) }
+            controller.internalTracks.isEmpty() -> item {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp, horizontal = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    QuietState(tr("internal.empty"))
+                    Spacer(Modifier.height(18.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        GlassActionButton(
+                            tr("internal.files"),
+                            onSelectFiles,
+                            LocalGlassEnv.current?.page,
+                            accent = true,
+                        )
+                        GlassActionButton(
+                            tr("internal.wifi"),
+                            onSelectWifi,
+                            LocalGlassEnv.current?.page,
+                        )
+                        GlassActionButton(
+                            tr("internal.webdav"),
+                            onSelectWebdav,
+                            LocalGlassEnv.current?.page,
+                        )
+                    }
+                }
+            }
+            controller.displayedTracks.isEmpty() -> item {
+                QuietState(
+                    when (controller.libraryFilter) {
+                        AndroidLibraryFilter.FAVORITES -> tr("library.favorites.empty")
+                        AndroidLibraryFilter.RECENT -> tr("library.recent.empty")
+                        AndroidLibraryFilter.ALL -> tr("internal.empty")
+                    },
+                )
+            }
+            else -> items(controller.displayedTracks, key = AndroidTrack::id) { track ->
+                TrackRow(
+                    track,
+                    track.id == currentId,
+                    onClick = { onPlay(controller.displayedTracks, track) },
+                    onLongClick = { controller.deleteInternalTrack(track) },
+                )
             }
         }
-        item { PlaylistStrip(controller.featuredPlaylists, controller::openPlaylist) }
-        item { SectionTitle(tr("discover.playing")) }
-        items(controller.homeTracks.take(12), key = AndroidTrack::id) { TrackRow(it, it.id == currentId) { onPlay(it) } }
     }
 }
 
 @Composable
-private fun SearchPage(controller: AndroidGatewayController, currentId: Long?, onPlay: (AndroidTrack) -> Unit) {
+private fun SearchPage(
+    controller: AndroidLibraryController,
+    currentId: Long?,
+    onPlay: (List<AndroidTrack>, AndroidTrack) -> Unit,
+    isPlaying: Boolean = false,
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp, 12.dp, 20.dp, 18.dp + LocalAndroidContentBottomInset.current),
@@ -797,124 +963,71 @@ private fun SearchPage(controller: AndroidGatewayController, currentId: Long?, o
         }
         when {
             controller.searchQuery.isBlank() -> item { QuietState(tr("search.empty")) }
-            controller.isSearching -> item { QuietState(tr("search.searching")) }
             controller.searchResults.isEmpty() -> item { QuietState(tr("search.no_results")) }
-            else -> items(controller.searchResults, key = AndroidTrack::id) { TrackRow(it, it.id == currentId) { onPlay(it) } }
-        }
-    }
-}
-
-@Composable
-private fun LibraryPage(controller: AndroidGatewayController, currentId: Long?, onPlay: (AndroidTrack) -> Unit) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp, 12.dp, 20.dp, 18.dp + LocalAndroidContentBottomInset.current),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        item {
-            Text(tr("library.title"), style = MaterialTheme.typography.displaySmall)
-            Spacer(Modifier.height(6.dp))
-            Text(
-                if (controller.isSignedIn) tr("library.sub.signed") else tr("library.sub.anon"),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        when {
-            !controller.isSignedIn -> item { SignInInvitation(controller::openLogin) }
-            controller.userPlaylists.isEmpty() && controller.isLoading -> item { QuietState(tr("library.syncing")) }
-            controller.userPlaylists.isEmpty() -> item { QuietState(tr("library.empty")) }
-            else -> items(controller.userPlaylists, key = AndroidPlaylist::id) { PlaylistListRow(it, controller::openPlaylist) }
-        }
-        if (controller.homeTracks.isNotEmpty()) {
-            item { SectionTitle(tr("library.continue")) }
-            items(controller.homeTracks.take(5), key = AndroidTrack::id) { TrackRow(it, it.id == currentId) { onPlay(it) } }
-        }
-    }
-}
-
-@Composable
-private fun MePage(controller: AndroidGatewayController) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp, 12.dp, 20.dp, 18.dp + LocalAndroidContentBottomInset.current),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        if (!controller.isSignedIn) {
-            item {
-                Text(tr("me.title"), style = MaterialTheme.typography.displaySmall)
-                Spacer(Modifier.height(6.dp))
-                Text(tr("me.sub"), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            item { SignInInvitation(controller::openLogin) }
-        } else {
-            val user = controller.currentUser!!
-            item {
-                Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.68f)) {
-                    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                        MobileArtwork(normalizedArtworkUrl(user.avatarUrl), user.nickname, Modifier.size(64.dp), 32.dp)
-                        Spacer(Modifier.width(16.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(user.nickname.ifBlank { tr("me.my_music") }, style = MaterialTheme.typography.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            user.signature?.takeIf(String::isNotBlank)?.let { signature ->
-                                Spacer(Modifier.height(4.dp))
-                                Text(signature, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            }
-                            Spacer(Modifier.height(7.dp))
-                            Text(tr("me.netease_id", user.userId), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f))
-                        }
-                    }
-                }
-            }
-            item { SectionTitle(tr("me.my_playlists"), tr("me.playlist.sub")) }
-            when {
-                controller.userPlaylists.isEmpty() && controller.isLoading -> item { QuietState(tr("library.syncing")) }
-                controller.userPlaylists.isEmpty() -> item { QuietState(tr("library.empty")) }
-                else -> items(controller.userPlaylists.take(3), key = AndroidPlaylist::id) { PlaylistListRow(it, controller::openPlaylist) }
-            }
-            item {
-                ThemeTextButton(onClick = { controller.selectDestination(AndroidRootDestination.LIBRARY) }) {
-                    Text(tr("me.view_library"))
-                }
+            else -> items(controller.searchResults, key = AndroidTrack::id) { track ->
+                TrackRow(track, track.id == currentId, onClick = { onPlay(controller.searchResults, track) }, isPlaying = isPlaying)
             }
         }
     }
 }
 
 @Composable
-private fun SettingsPage(controller: AndroidGatewayController, modifier: Modifier = Modifier) {
+private fun SettingsPage(
+    controller: AndroidLibraryController,
+    onOpenImport: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
     val colors = MaterialTheme.colorScheme
+    val glass = LocalGlassEnv.current != null
     val systemMonetAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val backgroundPicker = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.GetContent(),
+    val backgroundPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
     ) { uri -> uri?.let(controller::setBackgroundImage) }
-    var isAudioQualitySheetVisible by remember { mutableStateOf(false) }
-    var isCacheSheetVisible by remember { mutableStateOf(false) }
     var followDelaySliderValue by remember(controller.lyricFollowDelayMillis) {
         mutableFloatStateOf(controller.lyricFollowDelayMillis.toFloat())
     }
     var lyricFontSizeSliderValue by remember(controller.lyricFontSizeSp) {
         mutableFloatStateOf(controller.lyricFontSizeSp.toFloat())
     }
-    var gatewayBaseUrlDraft by remember(controller.gatewayBaseUrl) {
-        mutableStateOf(controller.gatewayBaseUrl)
-    }
     val displayedFollowDelay = normalizeLyricFollowDelayMillis(followDelaySliderValue.roundToLong())
     val displayedLyricFontSize = normalizeLyricFontSizeSp(lyricFontSizeSliderValue.roundToInt())
     val animationSpeedOptions = LyricAnimationSpeed.entries
-    val normalizedGatewayBaseUrl = normalizeGatewayBaseUrl(gatewayBaseUrlDraft)
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp, 10.dp, 20.dp, 18.dp + LocalAndroidContentBottomInset.current),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = controller::closeSettings) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("common.back"))
+            Text(tr("settings.title"), style = MaterialTheme.typography.headlineSmall)
+        }
+        item { SectionTitle(tr("settings.library")) }
+        item {
+            SettingsCard {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(tr("settings.library"), style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            if (controller.isInternalScanning) {
+                                tr("library.scanning")
+                            } else if (controller.internalTracks.isEmpty()) {
+                                tr("internal.empty")
+                            } else {
+                                tr("library.count", controller.internalTracks.size)
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.onSurfaceVariant,
+                        )
+                    }
+                    GlassActionButton(
+                        tr("internal.import"),
+                        onOpenImport,
+                        LocalGlassEnv.current?.page,
+                        accent = true,
+                    )
                 }
-                Spacer(Modifier.width(4.dp))
-                Text(tr("settings.title"), style = MaterialTheme.typography.headlineSmall)
             }
         }
         item { SectionTitle(tr("settings.appearance")) }
@@ -925,34 +1038,52 @@ private fun SettingsPage(controller: AndroidGatewayController, modifier: Modifie
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(tr("settings.style"), style = MaterialTheme.typography.titleSmall)
+                        Text(tr("settings.skin"), style = MaterialTheme.typography.titleSmall)
                         Text(
-                            controller.style.label,
+                            interfaceStyleLabel(currentInterfaceOption(controller)),
                             style = MaterialTheme.typography.bodySmall,
                             color = colors.onSurfaceVariant,
                         )
                     }
-                    StyleDropdown(
-                        selected = controller.style,
-                        onSelected = controller::updateStyle,
+                    SettingsDropdown(
+                        options = InterfaceStyleOption.entries,
+                        selected = currentInterfaceOption(controller),
+                        label = ::interfaceStyleLabel,
+                        onSelected = { option -> applyInterfaceOption(controller, option) },
+                        icon = InterfaceStyleOption::icon,
                     )
                 }
             }
         }
-        item {
-            SettingsCard {
-                Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 10.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (!glass) item {
+            SettingsCard(
+                modifier = Modifier.clickable(role = Role.Switch) {
+                    controller.toggleTheme()
+                },
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Column(Modifier.weight(1f)) {
                         Text(tr("settings.interface.title"), style = MaterialTheme.typography.titleSmall)
-                        Text(if (controller.isDark) tr("settings.interface.dark") else tr("settings.interface.light"), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                        Text(
+                            if (controller.isDark) tr("settings.interface.dark") else tr("settings.interface.light"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.onSurfaceVariant,
+                        )
                     }
-                    ThemeTextButton(onClick = controller::toggleTheme) {
-                        Text(if (controller.isDark) tr("settings.interface.switch_light") else tr("settings.interface.switch_dark"))
-                    }
+                    Spacer(Modifier.width(12.dp))
+                    SettingsSwitch(
+                        checked = controller.isDark,
+                        onCheckedChange = { controller.toggleTheme() },
+                    )
                 }
             }
         }
-        item {
+        if (!glass) item {
             val paletteOptions = buildList {
                 add(LazerPalette.Default)
                 if (systemMonetAvailable) add(LazerPalette.System)
@@ -974,6 +1105,7 @@ private fun SettingsPage(controller: AndroidGatewayController, modifier: Modifie
                             selected = controller.palette,
                             label = ::paletteLabel,
                             onSelected = controller::updatePalette,
+                            icon = { Icons.Outlined.ColorLens },
                         )
                     }
                     val custom = controller.palette
@@ -1001,7 +1133,7 @@ private fun SettingsPage(controller: AndroidGatewayController, modifier: Modifie
                 }
             }
         }
-        item {
+        if (!glass) item {
             SettingsCard {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1014,12 +1146,11 @@ private fun SettingsPage(controller: AndroidGatewayController, modifier: Modifie
                             )
                         }
                         if (controller.backgroundImage != null) {
-                            LazerSwitch(
-                                engine = controller.themeEngine,
+                            SettingsSwitch(
                                 checked = controller.backgroundImageEnabled,
                                 onCheckedChange = controller::updateBackgroundImageEnabled,
                             )
-                            Spacer(Modifier.width(6.dp))
+                            Spacer(Modifier.width(8.dp))
                         }
                         ThemeTextButton(onClick = { backgroundPicker.launch("image/*") }) {
                             Text(tr("settings.background.pick"))
@@ -1031,7 +1162,7 @@ private fun SettingsPage(controller: AndroidGatewayController, modifier: Modifie
                             Text(tr("settings.background.alpha"), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                             Spacer(Modifier.width(12.dp))
                             LazerSlider(
-                                engine = controller.themeEngine,
+                                engine = if (glass) LazerThemeEngine.MATERIAL3 else controller.themeEngine,
                                 value = controller.backgroundAlpha,
                                 onValueChange = controller::updateBackgroundAlpha,
                                 valueRange = 0f..1f,
@@ -1044,65 +1175,6 @@ private fun SettingsPage(controller: AndroidGatewayController, modifier: Modifie
                             Text(tr("settings.background.clear"), color = colors.error)
                         }
                     }
-                }
-            }
-        }
-        item { SectionTitle(tr("settings.playback")) }
-        item {
-            SettingsCard {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(role = Role.Button) { isAudioQualitySheetVisible = true }
-                        .padding(horizontal = 18.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(tr("settings.quality.title"), style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            tr("settings.quality.hint", controller.audioQuality.description),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.onSurfaceVariant,
-                        )
-                    }
-                    Spacer(Modifier.width(16.dp))
-                    Text(
-                        controller.audioQuality.label,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = colors.primary,
-                    )
-                }
-            }
-        }
-        item {
-            SettingsCard {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(role = Role.Switch) {
-                            controller.updateExclusiveAudio(!controller.exclusiveAudio)
-                        }
-                        .padding(horizontal = 18.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(tr("settings.exclusive.title"), style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            if (controller.exclusiveAudio) {
-                                tr("settings.exclusive.on")
-                            } else {
-                                tr("settings.exclusive.off")
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.onSurfaceVariant,
-                        )
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    LazerSwitch(
-                        engine = controller.themeEngine,
-                        checked = controller.exclusiveAudio,
-                        onCheckedChange = null,
-                    )
                 }
             }
         }
@@ -1126,11 +1198,7 @@ private fun SettingsPage(controller: AndroidGatewayController, modifier: Modifie
                         )
                     }
                     Spacer(Modifier.width(12.dp))
-                    LazerSwitch(
-                        engine = controller.themeEngine,
-                        checked = controller.wordLyricsEnabled,
-                        onCheckedChange = null,
-                    )
+                    SettingsSwitch(checked = controller.wordLyricsEnabled, onCheckedChange = controller::updateWordLyricsEnabled)
                 }
             }
         }
@@ -1153,11 +1221,7 @@ private fun SettingsPage(controller: AndroidGatewayController, modifier: Modifie
                         )
                     }
                     Spacer(Modifier.width(12.dp))
-                    LazerSwitch(
-                        engine = controller.themeEngine,
-                        checked = controller.lyricGlowEnabled,
-                        onCheckedChange = null,
-                    )
+                    SettingsSwitch(checked = controller.lyricGlowEnabled, onCheckedChange = controller::updateLyricGlowEnabled)
                 }
             }
         }
@@ -1180,7 +1244,7 @@ private fun SettingsPage(controller: AndroidGatewayController, modifier: Modifie
                         )
                     }
                     LazerSlider(
-                        engine = controller.themeEngine,
+                        engine = if (glass) LazerThemeEngine.MATERIAL3 else controller.themeEngine,
                         value = controller.lyricAnimationSpeed.ordinal.toFloat(),
                         onValueChange = { value ->
                             controller.updateLyricAnimationSpeed(
@@ -1231,7 +1295,7 @@ private fun SettingsPage(controller: AndroidGatewayController, modifier: Modifie
                         )
                     }
                     LazerSlider(
-                        engine = controller.themeEngine,
+                        engine = if (glass) LazerThemeEngine.MATERIAL3 else controller.themeEngine,
                         value = lyricFontSizeSliderValue,
                         onValueChange = {
                             lyricFontSizeSliderValue = normalizeLyricFontSizeSp(it.roundToInt()).toFloat()
@@ -1281,11 +1345,7 @@ private fun SettingsPage(controller: AndroidGatewayController, modifier: Modifie
                         )
                     }
                     Spacer(Modifier.width(12.dp))
-                    LazerSwitch(
-                        engine = controller.themeEngine,
-                        checked = controller.showFullLyrics,
-                        onCheckedChange = null,
-                    )
+                    SettingsSwitch(checked = controller.showFullLyrics, onCheckedChange = controller::updateShowFullLyrics)
                 }
             }
         }
@@ -1308,7 +1368,7 @@ private fun SettingsPage(controller: AndroidGatewayController, modifier: Modifie
                         )
                     }
                     LazerSlider(
-                        engine = controller.themeEngine,
+                        engine = if (glass) LazerThemeEngine.MATERIAL3 else controller.themeEngine,
                         value = followDelaySliderValue,
                         onValueChange = {
                             followDelaySliderValue = normalizeLyricFollowDelayMillis(it.roundToLong()).toFloat()
@@ -1335,138 +1395,24 @@ private fun SettingsPage(controller: AndroidGatewayController, modifier: Modifie
                 }
             }
         }
-        item { SectionTitle(tr("settings.storage")) }
-        item {
-            SettingsCard {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(role = Role.Button) { isCacheSheetVisible = true }
-                        .padding(horizontal = 18.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(tr("settings.cache.title"), style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            tr("settings.cache.hint"),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.onSurfaceVariant,
-                        )
-                    }
-                    Text(tr("settings.cache.select"), style = MaterialTheme.typography.labelLarge, color = colors.primary)
-                }
-            }
-        }
-        item {
-            SettingsCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(tr("settings.resync.title"), style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            tr("settings.resync.hint"),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.onSurfaceVariant,
-                        )
-                    }
-                    ThemeButton(onClick = controller::forceResync, enabled = !controller.isLoading) {
-                        Text(if (controller.isLoading) tr("settings.resync.doing") else tr("settings.resync.action"))
-                    }
-                }
-            }
-        }
-        item { SectionTitle(tr("settings.service")) }
-        item {
-            SettingsCard {
-                Column(Modifier.fillMaxWidth().padding(18.dp)) {
-                    Text(tr("settings.service.title"), style = MaterialTheme.typography.titleSmall)
-                    Spacer(Modifier.height(3.dp))
-                    Text(
-                        tr("settings.service.hint"),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = gatewayBaseUrlDraft,
-                        onValueChange = { gatewayBaseUrlDraft = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text(tr("settings.service.address")) },
-                        placeholder = { Text(DEFAULT_GATEWAY_BASE_URL) },
-                        supportingText = if (gatewayBaseUrlDraft.isNotBlank() && normalizedGatewayBaseUrl == null) {
-                            { Text(tr("settings.service.invalid")) }
-                        } else {
-                            null
-                        },
-                        isError = gatewayBaseUrlDraft.isNotBlank() && normalizedGatewayBaseUrl == null,
-                        singleLine = true,
-                        shape = RoundedCornerShape(14.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
-                    )
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        ThemeTextButton(onClick = { gatewayBaseUrlDraft = DEFAULT_GATEWAY_BASE_URL }) {
-                            Text(tr("settings.service.reset"))
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        ThemeButton(
-                            onClick = {
-                                normalizedGatewayBaseUrl?.let { controller.updateGatewayBaseUrl(it) }
-                            },
-                            enabled = normalizedGatewayBaseUrl != null && normalizedGatewayBaseUrl != controller.gatewayBaseUrl,
-                        ) {
-                            Text(tr("settings.save"))
-                        }
-                    }
-                }
-            }
-        }
-        item { SectionTitle(tr("settings.account")) }
-        if (controller.isSignedIn) {
-            val user = controller.currentUser!!
-            item {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    MobileArtwork(normalizedArtworkUrl(user.avatarUrl), user.nickname, Modifier.size(42.dp), 21.dp)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(user.nickname.ifBlank { tr("settings.account.signed.fallback") }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(tr("settings.account.signed"), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                    }
-                }
-            }
-            item {
-                ThemeTextButton(onClick = controller::logout) {
-                    Text(tr("settings.account.logout"), color = colors.error)
-                }
-            }
-        } else {
-            item { SignInInvitation(controller::openLogin) }
-        }
     }
-    if (isAudioQualitySheetVisible) {
-        AudioQualitySheet(
-            selected = controller.audioQuality,
-            onSelected = {
-                controller.updateAudioQuality(it)
-                isAudioQualitySheetVisible = false
-            },
-            onDismiss = { isAudioQualitySheetVisible = false },
-        )
-    }
-    if (isCacheSheetVisible) {
-        CacheChoiceSheet(
-            onClearSongs = {
-                controller.clearSongCache()
-                isCacheSheetVisible = false
-            },
-            onClearPlaylists = {
-                controller.clearPlaylistCache()
-                isCacheSheetVisible = false
-            },
-            onDismiss = { isCacheSheetVisible = false },
-        )
-    }
+}
+
+private fun MusicSource.icon(): ImageVector = when (this) {
+    MusicSource.DEVICE -> Icons.Outlined.Smartphone
+    MusicSource.INTERNAL -> Icons.Outlined.FolderSpecial
+}
+
+private fun AndroidLibrarySort.icon(): ImageVector = when (this) {
+    AndroidLibrarySort.TITLE -> Icons.Outlined.SortByAlpha
+    AndroidLibrarySort.ARTIST -> Icons.Outlined.Person
+    AndroidLibrarySort.ALBUM -> Icons.Outlined.Album
+}
+
+private fun LazerStyle.icon(): ImageVector = when (this) {
+    LazerStyle.MATERIAL -> Icons.Outlined.Palette
+    LazerStyle.MIUIX -> Icons.Outlined.Widgets
+    LazerStyle.LIQUID_GLASS -> Icons.Outlined.WaterDrop
 }
 
 @Composable
@@ -1475,30 +1421,235 @@ private fun <T> SettingsDropdown(
     selected: T,
     label: (T) -> String,
     onSelected: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ((T) -> ImageVector?)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
+    val isDark = colors.surface.luminance() < 0.5f
+    val haptic = LocalHapticFeedback.current
     var expanded by remember { mutableStateOf(false) }
-    Box {
-        ThemeTextButton(onClick = { expanded = true }) {
-            Text(label(selected), color = colors.primary)
-            Spacer(Modifier.width(4.dp))
-            Icon(Icons.Filled.ArrowDropDown, null, Modifier.size(18.dp), tint = colors.primary)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            label(option),
-                            color = if (option == selected) colors.primary else colors.onSurface,
-                        )
-                    },
-                    onClick = {
-                        onSelected(option)
-                        expanded = false
-                    },
+
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow,
+        ),
+        label = "dropdown_arrow",
+    )
+
+    val triggerInteraction = remember { MutableInteractionSource() }
+    val isPressed by triggerInteraction.collectIsPressedAsState()
+    val pillScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.94f else 1f,
+        animationSpec = spring(
+            dampingRatio = 0.6f,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "dropdown_pill_scale",
+    )
+
+    val triggerBgColor = if (isDark) {
+        if (expanded) Color(0xFF2C3642) else Color(0xFF222B34)
+    } else {
+        if (expanded) Color(0xFFF1F5F9) else Color(0xFFFFFFFF)
+    }
+    val triggerBorderColor = if (expanded) {
+        colors.primary
+    } else {
+        if (isDark) Color(0xFF3B4856) else Color(0xFFD2DCE6)
+    }
+
+    Box(modifier) {
+        Surface(
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                expanded = !expanded
+            },
+            shape = RoundedCornerShape(20.dp),
+            color = triggerBgColor,
+            shadowElevation = if (isPressed) 1.dp else if (expanded) 3.dp else 1.5.dp,
+            border = BorderStroke(
+                width = 1.2.dp,
+                color = triggerBorderColor,
+            ),
+            interactionSource = triggerInteraction,
+            modifier = Modifier.graphicsLayer {
+                scaleX = pillScale
+                scaleY = pillScale
+            },
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val selectedIcon = icon?.invoke(selected)
+                if (selectedIcon != null) {
+                    Icon(
+                        imageVector = selectedIcon,
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp),
+                        tint = colors.primary,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
+                Text(
+                    text = label(selected),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isDark) Color(0xFFECEFF4) else Color(0xFF1E293B),
+                    maxLines = 1,
+                )
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Filled.ArrowDropDown,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .graphicsLayer { rotationZ = arrowRotation },
+                    tint = colors.primary,
                 )
             }
+        }
+
+        val menuBgColor = if (isDark) Color(0xFF202830) else Color(0xFFFFFFFF)
+        val menuBorderColor = if (isDark) Color(0xFF384654) else Color(0xFFD6DEE7)
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            offset = DpOffset(x = 0.dp, y = 8.dp),
+            shape = RoundedCornerShape(18.dp),
+            containerColor = menuBgColor,
+            tonalElevation = 0.dp,
+            shadowElevation = 16.dp,
+            border = BorderStroke(1.2.dp, menuBorderColor),
+            modifier = Modifier
+                .background(menuBgColor, RoundedCornerShape(18.dp))
+                .widthIn(min = if (icon != null) 168.dp else 146.dp),
+        ) {
+            Spacer(Modifier.height(5.dp))
+            options.forEach { option ->
+                val isSelected = option == selected
+                val optionIcon = icon?.invoke(option)
+                val itemInteraction = remember { MutableInteractionSource() }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (isSelected) {
+                                if (isDark) Color(0xFF2C3946) else Color(0xFFEEF4F8)
+                            } else {
+                                menuBgColor
+                            }
+                        )
+                        .clickable(
+                            interactionSource = itemInteraction,
+                            indication = androidx.compose.material3.ripple(),
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onSelected(option)
+                                expanded = false
+                            },
+                        )
+                        .padding(horizontal = 10.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (optionIcon != null) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (isSelected) {
+                                        if (isDark) Color(0xFF3B4D5E) else Color(0xFFDCE8F2)
+                                    } else {
+                                        if (isDark) Color(0xFF27313B) else Color(0xFFF1F5F8)
+                                    }
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = optionIcon,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = if (isSelected) colors.primary else colors.onSurfaceVariant,
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                    }
+                    Text(
+                        text = label(option),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (isSelected) colors.primary else (if (isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B)),
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (isSelected) {
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clip(CircleShape)
+                                .background(colors.primary),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(11.dp),
+                                tint = colors.onPrimary,
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(5.dp))
+        }
+    }
+}
+
+/** One merged entry of the interface-style dropdown (skin + paper sub-style). */
+private enum class InterfaceStyleOption { GLASS, PAPER_MATERIAL, PAPER_MIUIX, PAPER_LIQUID_GLASS }
+
+private fun currentInterfaceOption(controller: AndroidLibraryController): InterfaceStyleOption = when {
+    controller.skin == AppSkin.GLASS -> InterfaceStyleOption.GLASS
+    controller.style == LazerStyle.MIUIX -> InterfaceStyleOption.PAPER_MIUIX
+    controller.style == LazerStyle.LIQUID_GLASS -> InterfaceStyleOption.PAPER_LIQUID_GLASS
+    else -> InterfaceStyleOption.PAPER_MATERIAL
+}
+
+private fun interfaceStyleLabel(option: InterfaceStyleOption): String = when (option) {
+    InterfaceStyleOption.GLASS -> tr("skin.glass")
+    InterfaceStyleOption.PAPER_MATERIAL -> LazerStyle.MATERIAL.label
+    InterfaceStyleOption.PAPER_MIUIX -> LazerStyle.MIUIX.label
+    InterfaceStyleOption.PAPER_LIQUID_GLASS -> LazerStyle.LIQUID_GLASS.label
+}
+
+private fun InterfaceStyleOption.icon(): ImageVector = when (this) {
+    InterfaceStyleOption.GLASS -> Icons.Outlined.AutoAwesome
+    InterfaceStyleOption.PAPER_MATERIAL -> Icons.Outlined.Palette
+    InterfaceStyleOption.PAPER_MIUIX -> Icons.Outlined.Widgets
+    InterfaceStyleOption.PAPER_LIQUID_GLASS -> Icons.Outlined.WaterDrop
+}
+
+private fun applyInterfaceOption(controller: AndroidLibraryController, option: InterfaceStyleOption) {
+    when (option) {
+        InterfaceStyleOption.GLASS -> controller.updateSkin(AppSkin.GLASS)
+        InterfaceStyleOption.PAPER_MATERIAL -> {
+            controller.updateSkin(AppSkin.PAPER)
+            controller.updateStyle(LazerStyle.MATERIAL)
+        }
+        InterfaceStyleOption.PAPER_MIUIX -> {
+            controller.updateSkin(AppSkin.PAPER)
+            controller.updateStyle(LazerStyle.MIUIX)
+        }
+        InterfaceStyleOption.PAPER_LIQUID_GLASS -> {
+            controller.updateSkin(AppSkin.PAPER)
+            controller.updateStyle(LazerStyle.LIQUID_GLASS)
         }
     }
 }
@@ -1516,6 +1667,7 @@ private fun StyleDropdown(selected: LazerStyle, onSelected: (LazerStyle) -> Unit
         selected = selected,
         label = LazerStyle::label,
         onSelected = onSelected,
+        icon = LazerStyle::icon,
     )
 }
 
@@ -1526,175 +1678,18 @@ private fun LanguageDropdown(selected: LazerLanguage, onSelected: (LazerLanguage
         selected = selected,
         label = LazerLanguage::displayName,
         onSelected = onSelected,
+        icon = { Icons.Outlined.Translate },
     )
 }
 
 @Composable
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-private fun CacheChoiceSheet(
-    onClearSongs: () -> Unit,
-    onClearPlaylists: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val colors = MaterialTheme.colorScheme
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = colors.surface,
-    ) {
-        Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 28.dp)) {
-            Text(tr("settings.cache.dialog.title"), style = MaterialTheme.typography.headlineSmall)
-            Text(
-                tr("settings.cache.dialog.body.mobile"),
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp, bottom = 14.dp),
-            )
-            ThemeTextButton(onClick = onClearSongs, modifier = Modifier.fillMaxWidth()) {
-                Text(tr("settings.cache.clear.songs"), color = colors.error)
-            }
-            ThemeTextButton(onClick = onClearPlaylists, modifier = Modifier.fillMaxWidth()) {
-                Text(tr("settings.cache.clear.playlists"), color = colors.error)
-            }
-        }
-    }
-}
-
-@Composable
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-private fun AudioQualitySheet(
-    selected: AudioQuality,
-    onSelected: (AudioQuality) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val colors = MaterialTheme.colorScheme
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = colors.surface,
-        contentColor = colors.onSurface,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
-        ) {
-            Text(
-                tr("player.quality"),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-            )
-            Text(
-                tr("settings.quality.sheet.hint"),
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            )
-            Spacer(Modifier.height(8.dp))
-            ANDROID_AUDIO_QUALITY_OPTIONS.forEach { quality ->
-                val isSelected = quality == selected
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .selectable(
-                            selected = isSelected,
-                            role = Role.RadioButton,
-                            onClick = { onSelected(quality) },
-                        )
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RadioButton(
-                        selected = isSelected,
-                        onClick = null,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        quality.label,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = if (isSelected) colors.primary else colors.onSurface,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        quality.description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlaylistDetail(
-    playlist: AndroidPlaylist,
-    tracks: List<AndroidTrack>,
-    isLoading: Boolean,
-    currentId: Long?,
-    modifier: Modifier = Modifier,
-    onBack: () -> Unit,
-    onPlay: (AndroidTrack) -> Unit,
-) {
-    val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-    val currentTrackIndex = tracks.indexOfFirst { it.id == currentId }
-    Box(modifier.fillMaxSize()) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(20.dp, 10.dp, 20.dp, (if (currentTrackIndex >= 0) 96.dp else 20.dp) + LocalAndroidContentBottomInset.current),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("playlist.back")) }
-                Text(tr("playlist.title"), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                MobileArtwork(playlist.coverUrl, playlist.title, Modifier.size(96.dp), 20.dp)
-                Spacer(Modifier.width(18.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(playlist.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(5.dp))
-                    Text(playlist.subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(tr("playlist.tracks", tracks.size.takeIf { it > 0 } ?: playlist.trackCount), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-        if (isLoading && tracks.isEmpty()) item { QuietState(tr("playlist.opening")) }
-        if (!isLoading && tracks.isEmpty()) item { QuietState(tr("playlist.empty")) }
-            items(tracks, key = AndroidTrack::id) { TrackRow(it, it.id == currentId) { onPlay(it) } }
-        }
-        if (currentTrackIndex >= 0) {
-            ExtendedFloatingActionButton(
-                onClick = { scope.launch { listState.animateScrollToItem(currentTrackIndex + 2) } },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 20.dp),
-                shape = RoundedCornerShape(16.dp),
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                contentColor = MaterialTheme.colorScheme.primary,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp, pressedElevation = 2.dp),
-                icon = { Icon(Icons.Outlined.MyLocation, null, Modifier.size(18.dp)) },
-                text = { Text(tr("playlist.locate"), style = MaterialTheme.typography.labelLarge) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun MobileHeader(controller: AndroidGatewayController, modifier: Modifier = Modifier) {
+private fun MobileHeader(controller: AndroidLibraryController, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("Lazer", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+            Text("Music Hub", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
         }
-        IconButton(onClick = controller::toggleTheme) { Icon(if (controller.isDark) Icons.Outlined.LightMode else Icons.Outlined.DarkMode, tr("player.toggle_theme")) }
-        IconButton(onClick = controller::openSettings) {
-            Icon(Icons.Outlined.Settings, tr("player.open_settings"))
+        if (LocalGlassEnv.current == null) {
+            IconButton(onClick = controller::toggleTheme) { Icon(if (controller.isDark) Icons.Outlined.LightMode else Icons.Outlined.DarkMode, tr("player.toggle_theme")) }
         }
     }
 }
@@ -1707,58 +1702,84 @@ private fun SectionTitle(title: String, subtitle: String? = null) {
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun PlaylistStrip(playlists: List<AndroidPlaylist>, onOpen: (AndroidPlaylist) -> Unit) {
-    if (playlists.isEmpty()) {
-        QuietState(tr("strip.empty"))
-    } else {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            items(playlists, key = AndroidPlaylist::id) { playlist ->
-                Column(
-                    Modifier.width(158.dp).clip(RoundedCornerShape(18.dp)).clickable(role = Role.Button) { onOpen(playlist) }.padding(bottom = 4.dp),
-                ) {
-                    MobileArtwork(playlist.coverUrl, playlist.title, Modifier.size(158.dp), 18.dp)
-                    Spacer(Modifier.height(10.dp))
-                    Text(playlist.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(playlist.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlaylistListRow(playlist: AndroidPlaylist, onOpen: (AndroidPlaylist) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(role = Role.Button) { onOpen(playlist) }.padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        MobileArtwork(playlist.coverUrl, playlist.title, Modifier.size(56.dp), 14.dp)
-        Spacer(Modifier.width(13.dp))
-        Column(Modifier.weight(1f)) {
-            Text(if (playlist.isLikedCollection) tr("liked.title") else playlist.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(playlist.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        Text("${playlist.trackCount}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun TrackRow(track: AndroidTrack, current: Boolean, onClick: () -> Unit) {
+private fun TrackRow(
+    track: AndroidTrack,
+    current: Boolean,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    isPlaying: Boolean = false,
+) {
     val colors = MaterialTheme.colorScheme
+    val glass = LocalGlassEnv.current != null
+    val palette = LocalGlassPalette.current
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
-            .background(if (current) colors.primaryContainer.copy(alpha = 0.58f) else Color.Transparent)
-            .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 8.dp, vertical = 8.dp),
+            .background(
+                when {
+                    current && glass -> palette.AccentWash
+                    current -> colors.primaryContainer.copy(alpha = 0.58f)
+                    else -> Color.Transparent
+                },
+            )
+            .then(
+                if (current && glass) {
+                    Modifier.border(1.dp, palette.AccentRim, RoundedCornerShape(15.dp))
+                } else {
+                    Modifier
+                },
+            )
+            .combinedClickable(
+                role = Role.Button,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         MobileArtwork(track.coverUrl, track.title, Modifier.size(48.dp), 12.dp)
         Spacer(Modifier.width(13.dp))
         Column(Modifier.weight(1f)) {
-            Text(track.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(listOf(track.artist, track.album).filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                track.title,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = Color.Unspecified,
+            )
+            Text(listOf(track.displayArtist, track.album).filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (current && glass) {
+            PlayingBars(accent = palette.Accent, animate = isPlaying, modifier = Modifier.padding(end = 10.dp))
         }
         Text(track.durationLabel, style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+    }
+}
+
+/** Three tiny accent bars that dance while the highlighted track is playing. */
+@Composable
+private fun PlayingBars(accent: Color, animate: Boolean, modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "playing-bars")
+    val bases = listOf(0.40f, 1f, 0.65f)
+    Row(
+        modifier.height(14.dp),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        bases.forEachIndexed { index, base ->
+            val barFraction = if (animate) {
+                transition.animateFloat(
+                    initialValue = base,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(tween(380 + index * 120), RepeatMode.Reverse),
+                    label = "bar" + index,
+                ).value
+            } else {
+                base
+            }
+            Box(Modifier.size(3.dp, 14.dp * barFraction).clip(CircleShape).background(accent))
+        }
     }
 }
 
@@ -1794,20 +1815,194 @@ private fun MobileArtwork(
 }
 
 @Composable
-private fun SignInInvitation(onSignIn: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(22.dp), color = colors.primaryContainer.copy(alpha = 0.74f)) {
-        Column(Modifier.padding(22.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(42.dp).clip(CircleShape).background(colors.surface), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Person, null, tint = colors.primary) }
-                Spacer(Modifier.width(13.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(tr("signin.continue"), style = MaterialTheme.typography.titleLarge, color = colors.onPrimaryContainer)
-                    Text(tr("login.sign_in.sub"), style = MaterialTheme.typography.bodySmall, color = colors.onPrimaryContainer.copy(alpha = 0.74f))
-                }
+private fun GlassMiniPlayer(
+    track: AndroidTrack,
+    isPlaying: Boolean,
+    isPreparing: Boolean,
+    backdrop: Backdrop,
+    onOpen: () -> Unit,
+    onToggle: () -> Unit,
+) {
+    val palette = LocalGlassPalette.current
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
+            .height(64.dp)
+            .glassRow(backdrop, cornerRadius = 24.dp)
+            .clickable(role = Role.Button, onClick = onOpen),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            MobileArtwork(track.coverUrl, track.title, Modifier.size(42.dp), 13.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(track.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    if (isPreparing) tr("player.preparing") else track.displayArtist,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = palette.InkMid,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Spacer(Modifier.height(16.dp))
-            ThemeButton(onClick = onSignIn, cornerRadius = 11.dp) { Text(tr("login.sign_in")) }
+            Box(
+                Modifier
+                    .size(42.dp)
+                    .glassTile(backdrop, cornerRadius = 21.dp, tint = palette.Accent.copy(alpha = 0.30f))
+                    .clickable(role = Role.Button, onClick = onToggle),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    if (isPlaying) tr("player.pause") else tr("player.play"),
+                    Modifier.size(22.dp),
+                    tint = palette.InkHi,
+                )
+            }
+        }
+    }
+}
+
+/** Circular liquid-glass icon button (VibeUsage IconGlassButton pattern). */
+@Composable
+private fun GlassIconButton(
+    size: Dp,
+    backdrop: Backdrop,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconSize: Dp = 22.dp,
+    tint: Color = LocalGlassPalette.current.InkHi,
+) {
+    Box(
+        modifier
+            .size(size)
+            .glassTile(backdrop, cornerRadius = size / 2)
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription, Modifier.size(iconSize), tint = tint)
+    }
+}
+
+/**
+ * Settings switch: Always renders the liquid glass switch [GlassSwitch] as requested.
+ */
+@Composable
+private fun SettingsSwitch(
+    checked: Boolean,
+    onCheckedChange: ((Boolean) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    GlassSwitch(checked = checked, onCheckedChange = onCheckedChange, modifier = modifier)
+}
+
+/** iOS / Liquid glass style capsule switch with fluid spring physics, tactile haptic feedback,
+ * and liquid stretch thumb response. */
+@Composable
+private fun GlassSwitch(
+    checked: Boolean,
+    onCheckedChange: ((Boolean) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.colorScheme
+    val isDark = colors.surface.luminance() < 0.5f
+    val haptic = LocalHapticFeedback.current
+    val interaction = remember { MutableInteractionSource() }
+    val isPressed by interaction.collectIsPressedAsState()
+
+    val fraction by animateFloatAsState(
+        targetValue = if (checked) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.75f, stiffness = 400f),
+        label = "glass-switch-fraction",
+    )
+
+    val thumbWidth by animateDpAsState(
+        targetValue = if (isPressed) 29.dp else 26.dp,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 420f),
+        label = "glass-switch-thumb-width",
+    )
+
+    val activeColor = if (LocalGlassEnv.current != null) LocalGlassPalette.current.Accent else colors.primary
+    val inactiveColor = if (isDark) Color(0xFF333D48) else Color(0xFFE2E7ED)
+    val trackBorderColor = if (!checked) {
+        if (isDark) Color(0xFF455260) else Color(0xFFD1D8E0)
+    } else {
+        null
+    }
+
+    Box(
+        modifier = modifier
+            .size(width = 54.dp, height = 32.dp)
+            .clip(CircleShape)
+            .background(if (checked) activeColor else inactiveColor)
+            .then(
+                if (trackBorderColor != null) {
+                    Modifier.border(1.dp, trackBorderColor, CircleShape)
+                } else Modifier
+            )
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Switch,
+            ) {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onCheckedChange?.invoke(!checked)
+            },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        val maxTravel = 54.dp - 6.dp - thumbWidth
+        val thumbOffset = 3.dp + maxTravel * fraction
+
+        Box(
+            Modifier
+                .offset { IntOffset(x = thumbOffset.roundToPx(), y = 0) }
+                .size(width = thumbWidth, height = 26.dp)
+                .shadow(elevation = if (isPressed) 4.dp else 2.5.dp, shape = CircleShape)
+                .clip(CircleShape)
+                .background(Color.White),
+        )
+    }
+}
+/**
+ * Skin-aware action button: a VibeUsage LiquidButton under the glass skin, the paper theme's
+ * button otherwise. [accent] renders the emphasized (filled) variant of each skin.
+ */
+@Composable
+private fun GlassActionButton(
+    text: String,
+    onClick: () -> Unit,
+    backdrop: Backdrop?,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    accent: Boolean = false,
+) {
+    if (LocalGlassEnv.current != null) {
+        // Solid pill: LiquidButton's backdrop sampling drifts inside scrolling lists, so the
+        // glass skin uses a themed solid pill here instead.
+        val palette = LocalGlassPalette.current
+        androidx.compose.material3.Surface(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = modifier,
+            shape = RoundedCornerShape(percent = 50),
+            color = if (accent) palette.AccentInk else Color.White,
+            contentColor = if (accent) Color.White else palette.InkHi,
+            border = if (accent) null else BorderStroke(1.dp, palette.Rim),
+        ) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(text, style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    } else if (accent) {
+        ThemeButton(onClick = onClick, modifier = modifier, enabled = enabled, cornerRadius = 11.dp) {
+            Text(text)
+        }
+    } else {
+        ThemeTextButton(onClick = onClick, modifier = modifier, enabled = enabled) {
+            Text(text)
         }
     }
 }
@@ -1831,7 +2026,7 @@ private fun MiniPlayer(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(track.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(if (isPreparing) tr("player.preparing") else track.artist, style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (isPreparing) tr("player.preparing") else track.displayArtist, style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             IconButton(onClick = onToggle, modifier = Modifier.size(42.dp), colors = IconButtonDefaults.iconButtonColors(containerColor = colors.primaryContainer)) {
                 Icon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (isPlaying) tr("player.pause") else tr("player.play"), tint = colors.onPrimaryContainer)
@@ -2113,11 +2308,13 @@ private fun NowPlayingPage(
     onNext: () -> Unit,
     onSeek: (Long) -> Unit,
     onLyrics: () -> Unit,
+    glass: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val track = snapshot.track ?: return
     val colors = MaterialTheme.colorScheme
-    val glass = rememberLazerLiquidGlass(liquidGlassEnabled, colors.background)
+    val kashifGlass = rememberLazerLiquidGlass(liquidGlassEnabled, colors.background)
+    val glassBackdrop = if (glass) rememberPageBackdrop() else null
     val duration = snapshot.durationMillis.takeIf { it > 0L } ?: track.durationMillis
     val target = if (duration > 0) snapshot.positionMillis.toFloat() / duration else 0f
     val display by animateFloatAsState(
@@ -2130,14 +2327,18 @@ private fun NowPlayingPage(
     LaunchedEffect(display, seeking) { if (!seeking) seekProgress = display }
 
     // Keep the visual background edge-to-edge; only the controls need to avoid system bars.
-    Surface(modifier.fillMaxSize(), color = colors.background) {
+    Surface(modifier.fillMaxSize(), color = if (glass) Color.Transparent else colors.background) {
+        Box(Modifier.fillMaxSize()) {
+            if (glass) {
+                GlassBackground(glassBackdrop!!)
+            }
         if (isLandscapeLayout()) {
             Box(Modifier.fillMaxSize()) {
-                AndroidAlbumFlowBackground(
+                if (!glass) AndroidAlbumFlowBackground(
                     track = track,
                     modifier = Modifier
                         .fillMaxSize()
-                        .captureLiquidGlass(glass),
+                        .captureLiquidGlass(kashifGlass),
                     cornerRadius = 0.dp,
                     veil = colors.background.copy(alpha = 0.38f),
                 )
@@ -2153,7 +2354,7 @@ private fun NowPlayingPage(
                             .widthIn(min = 230.dp, max = 320.dp)
                             .fillMaxSize()
                             .padding(10.dp)
-                            .liquidGlassSurface(glass, RoundedCornerShape(24.dp), colors.surface)
+                            .liquidGlassSurface(kashifGlass, RoundedCornerShape(24.dp), colors.surface)
                             .padding(horizontal = 14.dp, vertical = 10.dp),
                     ) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -2169,27 +2370,66 @@ private fun NowPlayingPage(
                         )
                         Spacer(Modifier.height(10.dp))
                         Text(track.title, color = colors.onBackground, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(track.artist, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(track.displayArtist, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Spacer(Modifier.weight(1f))
-                        ThinSeekBar(
-                            progress = seekProgress,
-                            bufferedProgress = snapshot.bufferedFraction,
-                            onSeek = { seeking = true; seekProgress = it },
-                            onFinished = { seeking = false; onSeek((duration * seekProgress).toLong()) },
-                        )
+                        if (glassBackdrop != null) {
+                            LiquidSlider(
+                                value = { seekProgress },
+                                onValueChange = { seeking = true; seekProgress = it },
+                                valueRange = 0f..1f,
+                                visibilityThreshold = 0.0005f,
+                                backdrop = glassBackdrop,
+                                modifier = Modifier.fillMaxWidth(),
+                                onValueChangeFinished = { seeking = false; onSeek((duration * seekProgress).toLong()) },
+                            )
+                        } else {
+                            ThinSeekBar(
+                                progress = seekProgress,
+                                bufferedProgress = snapshot.bufferedFraction,
+                                onSeek = { seeking = true; seekProgress = it },
+                                onFinished = { seeking = false; onSeek((duration * seekProgress).toLong()) },
+                            )
+                        }
                         Row(Modifier.fillMaxWidth()) {
                             Text(formatPlaybackTime((duration * seekProgress).toLong()), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
                             Spacer(Modifier.weight(1f))
                             Text(formatPlaybackTime(duration), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = onPrevious, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.SkipPrevious, tr("player.previous"), Modifier.size(30.dp), tint = colors.onBackground) }
-                            IconButton(onClick = onToggle, modifier = Modifier.size(60.dp), colors = IconButtonDefaults.iconButtonColors(containerColor = colors.primary, contentColor = colors.onPrimary)) {
-                                Icon(if (snapshot.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (snapshot.isPlaying) tr("player.pause") else tr("player.play"), Modifier.size(32.dp))
-                            }
-                            IconButton(onClick = onNext, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.SkipNext, tr("player.next"), Modifier.size(30.dp), tint = colors.onBackground) }
-                            IconButton(onClick = onToggleLiked, modifier = Modifier.size(48.dp)) {
-                                Icon(if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder, if (isLiked) tr("player.like.remove") else tr("player.like.add"), tint = if (isLiked) colors.primary else colors.onBackground)
+                            if (glassBackdrop != null) {
+                                val palette = LocalGlassPalette.current
+                                GlassIconButton(48.dp, glassBackdrop, Icons.Filled.SkipPrevious, tr("player.previous"), onPrevious, iconSize = 28.dp)
+                                Box(
+                                    Modifier
+                                        .size(64.dp)
+                                        .glassTile(glassBackdrop, cornerRadius = 32.dp, tint = palette.Accent.copy(alpha = 0.55f))
+                                        .clickable(role = Role.Button, onClick = onToggle),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        if (snapshot.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                        if (snapshot.isPlaying) tr("player.pause") else tr("player.play"),
+                                        Modifier.size(30.dp),
+                                        tint = Color(0xFF04211D),
+                                    )
+                                }
+                                GlassIconButton(48.dp, glassBackdrop, Icons.Filled.SkipNext, tr("player.next"), onNext, iconSize = 28.dp)
+                                GlassIconButton(
+                                    48.dp, glassBackdrop,
+                                    if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                    if (isLiked) tr("player.like.remove") else tr("player.like.add"),
+                                    onToggleLiked,
+                                    tint = if (isLiked) palette.Accent else palette.InkHi,
+                                )
+                            } else {
+                                IconButton(onClick = onPrevious, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.SkipPrevious, tr("player.previous"), Modifier.size(30.dp), tint = colors.onBackground) }
+                                IconButton(onClick = onToggle, modifier = Modifier.size(60.dp), colors = IconButtonDefaults.iconButtonColors(containerColor = colors.primary, contentColor = colors.onPrimary)) {
+                                    Icon(if (snapshot.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (snapshot.isPlaying) tr("player.pause") else tr("player.play"), Modifier.size(32.dp))
+                                }
+                                IconButton(onClick = onNext, modifier = Modifier.size(48.dp)) { Icon(Icons.Filled.SkipNext, tr("player.next"), Modifier.size(30.dp), tint = colors.onBackground) }
+                                IconButton(onClick = onToggleLiked, modifier = Modifier.size(48.dp)) {
+                                    Icon(if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder, if (isLiked) tr("player.like.remove") else tr("player.like.add"), tint = if (isLiked) colors.primary else colors.onBackground)
+                                }
                             }
                         }
                     }
@@ -2223,31 +2463,58 @@ private fun NowPlayingPage(
                 IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, tr("player.collapse"), tint = colors.onSurfaceVariant) }
                 Text(tr("player.now_playing"), Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
             }
-            Spacer(Modifier.weight(0.4f))
-            MobileArtwork(
-                track.coverUrl,
-                track.title,
-                Modifier.fillMaxWidth().heightIn(max = 390.dp).height(320.dp),
-                30.dp,
-                onClick = onLyrics,
-            )
+            // The artwork absorbs the leftover height so the controls below never fall off
+            // shorter screens (e.g. 1080x2000 emulator windows).
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                val artworkSide = minOf(maxWidth, maxHeight)
+                MobileArtwork(
+                    track.coverUrl,
+                    track.title,
+                    Modifier.size(artworkSide),
+                    30.dp,
+                    onClick = onLyrics,
+                )
+            }
             Spacer(Modifier.height(32.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(track.title, style = MaterialTheme.typography.headlineMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(track.artist, style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(track.displayArtist, style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                IconButton(onClick = onToggleLiked, modifier = Modifier.size(48.dp)) {
-                    Icon(if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder, if (isLiked) tr("player.like.remove") else tr("player.like.add"), tint = if (isLiked) colors.primary else colors.onSurfaceVariant)
+                if (glassBackdrop != null) {
+                    val palette = LocalGlassPalette.current
+                    GlassIconButton(
+                        42.dp, glassBackdrop,
+                        if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        if (isLiked) tr("player.like.remove") else tr("player.like.add"),
+                        onToggleLiked,
+                        tint = if (isLiked) palette.Accent else palette.InkHi,
+                    )
+                } else {
+                    IconButton(onClick = onToggleLiked, modifier = Modifier.size(48.dp)) {
+                        Icon(if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder, if (isLiked) tr("player.like.remove") else tr("player.like.add"), tint = if (isLiked) colors.primary else colors.onSurfaceVariant)
+                    }
                 }
             }
             Spacer(Modifier.height(28.dp))
-            ThinSeekBar(
-                progress = seekProgress,
-                bufferedProgress = snapshot.bufferedFraction,
-                onSeek = { seeking = true; seekProgress = it },
-                onFinished = { seeking = false; onSeek((duration * seekProgress).toLong()) },
-            )
+            if (glassBackdrop != null) {
+                LiquidSlider(
+                    value = { seekProgress },
+                    onValueChange = { seeking = true; seekProgress = it },
+                    valueRange = 0f..1f,
+                    visibilityThreshold = 0.0005f,
+                    backdrop = glassBackdrop,
+                    modifier = Modifier.fillMaxWidth(),
+                    onValueChangeFinished = { seeking = false; onSeek((duration * seekProgress).toLong()) },
+                )
+            } else {
+                ThinSeekBar(
+                    progress = seekProgress,
+                    bufferedProgress = snapshot.bufferedFraction,
+                    onSeek = { seeking = true; seekProgress = it },
+                    onFinished = { seeking = false; onSeek((duration * seekProgress).toLong()) },
+                )
+            }
             Row(Modifier.fillMaxWidth()) {
                 Text(formatPlaybackTime((duration * seekProgress).toLong()), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
                 Spacer(Modifier.weight(1f))
@@ -2255,18 +2522,51 @@ private fun NowPlayingPage(
             }
             Spacer(Modifier.height(18.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onPrevious, modifier = Modifier.size(50.dp)) { Icon(Icons.Filled.SkipPrevious, tr("player.previous"), Modifier.size(31.dp)) }
-                IconButton(onClick = onToggle, modifier = Modifier.size(68.dp), colors = IconButtonDefaults.iconButtonColors(containerColor = colors.primary, contentColor = colors.onPrimary)) {
-                    Icon(if (snapshot.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (snapshot.isPlaying) tr("player.pause") else tr("player.play"), Modifier.size(35.dp))
+                if (glassBackdrop != null) {
+                    val palette = LocalGlassPalette.current
+                    GlassIconButton(52.dp, glassBackdrop, Icons.Filled.SkipPrevious, tr("player.previous"), onPrevious, iconSize = 28.dp)
+                    Box(
+                        Modifier
+                            .size(68.dp)
+                            .glassTile(glassBackdrop, cornerRadius = 34.dp, tint = palette.Accent.copy(alpha = 0.55f))
+                            .clickable(role = Role.Button, onClick = onToggle),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            if (snapshot.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            if (snapshot.isPlaying) tr("player.pause") else tr("player.play"),
+                            Modifier.size(32.dp),
+                            tint = Color(0xFF04211D),
+                        )
+                    }
+                    GlassIconButton(52.dp, glassBackdrop, Icons.Filled.SkipNext, tr("player.next"), onNext, iconSize = 28.dp)
+                } else {
+                    IconButton(onClick = onPrevious, modifier = Modifier.size(50.dp)) { Icon(Icons.Filled.SkipPrevious, tr("player.previous"), Modifier.size(31.dp)) }
+                    IconButton(onClick = onToggle, modifier = Modifier.size(68.dp), colors = IconButtonDefaults.iconButtonColors(containerColor = colors.primary, contentColor = colors.onPrimary)) {
+                        Icon(if (snapshot.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (snapshot.isPlaying) tr("player.pause") else tr("player.play"), Modifier.size(35.dp))
+                    }
+                    IconButton(onClick = onNext, modifier = Modifier.size(50.dp)) { Icon(Icons.Filled.SkipNext, tr("player.next"), Modifier.size(31.dp)) }
                 }
-                IconButton(onClick = onNext, modifier = Modifier.size(50.dp)) { Icon(Icons.Filled.SkipNext, tr("player.next"), Modifier.size(31.dp)) }
             }
             Spacer(Modifier.weight(1f))
-            ThemeTextButton(onClick = onLyrics, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Icon(Icons.Outlined.Lyrics, null, Modifier.size(18.dp)); Spacer(Modifier.width(7.dp)); Text(tr("player.lyrics"))
+            if (glassBackdrop != null) {
+                LiquidButton(
+                    onClick = onLyrics,
+                    backdrop = glassBackdrop,
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                ) {
+                    Icon(Icons.Outlined.Lyrics, null, Modifier.size(18.dp), tint = LocalGlassPalette.current.InkHi)
+                    Spacer(Modifier.width(7.dp))
+                    Text(tr("player.lyrics"), color = LocalGlassPalette.current.InkHi)
+                }
+            } else {
+                ThemeTextButton(onClick = onLyrics, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    Icon(Icons.Outlined.Lyrics, null, Modifier.size(18.dp)); Spacer(Modifier.width(7.dp)); Text(tr("player.lyrics"))
+                }
             }
             snapshot.message?.let { Text(it, Modifier.fillMaxWidth().padding(bottom = 8.dp), style = MaterialTheme.typography.bodySmall, color = colors.error, textAlign = TextAlign.Center) }
             }
+        }
         }
     }
 }
@@ -2308,129 +2608,381 @@ private fun ThinSeekBar(
 
 @Composable
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-private fun LoginSheet(controller: AndroidGatewayController) {
+private fun ImportOptionsSheet(
+    onSelectFiles: () -> Unit,
+    onSelectWifi: () -> Unit,
+    onSelectWebdav: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val contentScrollState = rememberScrollState()
+    val isDark = colors.surface.luminance() < 0.5f
+    val sheetBackdrop = kyantRememberLayerBackdrop()
+
     ModalBottomSheet(
-        onDismissRequest = controller::closeLogin,
-        sheetState = sheetState,
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = colors.surface,
-        contentColor = colors.onSurface,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(contentScrollState)
-                .padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+        Box {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(colors.surface)
+                    .kyantLayerBackdrop(sheetBackdrop),
+            )
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 24.dp, end = 24.dp, bottom = 36.dp),
+            ) {
+                Text(tr("internal.import"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    tr("internal.empty"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(20.dp))
+
+                ImportOptionRow(
+                    imageVector = Icons.Outlined.FolderOpen,
+                    title = tr("internal.files"),
+                    desc = "选择本地音频文件与同名 .lrc 歌词一并导入",
+                    onClick = {
+                        onDismiss()
+                        onSelectFiles()
+                    },
+                )
+                Spacer(Modifier.height(10.dp))
+
+                ImportOptionRow(
+                    imageVector = Icons.Outlined.Wifi,
+                    title = tr("internal.wifi"),
+                    desc = tr("wifi.hint"),
+                    onClick = {
+                        onDismiss()
+                        onSelectWifi()
+                    },
+                )
+                Spacer(Modifier.height(10.dp))
+
+                ImportOptionRow(
+                    imageVector = Icons.Outlined.CloudDownload,
+                    title = tr("internal.webdav"),
+                    desc = "连接坚果云、Alist 或 Nextcloud 网盘下载",
+                    onClick = {
+                        onDismiss()
+                        onSelectWebdav()
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ImportOptionRow(
+    imageVector: ImageVector,
+    title: String,
+    desc: String,
+    onClick: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val isDark = colors.surface.luminance() < 0.5f
+    val interaction = remember { MutableInteractionSource() }
+    val isPressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        label = "import_option_row_scale",
+    )
+
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = if (isDark) Color(0xFF242C34) else Color(0xFFF4F7FA),
+        border = BorderStroke(1.dp, if (isDark) Color(0xFF384452) else Color(0xFFE2E7ED)),
+        interactionSource = interaction,
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(tr("login.continue"), style = MaterialTheme.typography.headlineSmall)
-            Text(tr("login.sub.mobile"), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                AndroidLoginMethod.entries.forEach { method ->
-                    ThemeTextButton(onClick = { controller.selectLoginMethod(method) }) {
-                        Text(method.label, color = if (method == controller.loginMethod) colors.primary else colors.onSurfaceVariant, fontWeight = if (method == controller.loginMethod) FontWeight.SemiBold else FontWeight.Normal)
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(colors.primary.copy(alpha = if (isDark) 0.22f else 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = imageVector,
+                    contentDescription = null,
+                    tint = colors.primary,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(2.dp))
+                Text(desc, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            }
+            Icon(
+                imageVector = Icons.Filled.ChevronRight,
+                contentDescription = null,
+                tint = colors.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+@Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+private fun WifiImportSheet(controller: AndroidLibraryController, onDismiss: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    var copiedUrl by remember { mutableStateOf<String?>(null) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = colors.surface,
+    ) {
+        // Sheet-local flat backdrop so LiquidButton glass has something to sample without
+        // referencing a layer that contains the button itself.
+        val sheetBackdrop = kyantRememberLayerBackdrop()
+        Box {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(colors.surface)
+                    .kyantLayerBackdrop(sheetBackdrop),
+            )
+            Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 28.dp)) {
+                Text(tr("wifi.title"), style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    tr("wifi.hint"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(20.dp))
+                if (controller.wifiServerRunning) {
+                    Text(tr("wifi.running"), style = MaterialTheme.typography.titleSmall, color = colors.primary)
+                    Spacer(Modifier.height(12.dp))
+
+                    val hasEmulator = controller.wifiAddresses.any { it == "127.0.0.1" || it.startsWith("10.0.2.") }
+
+                    controller.wifiAddresses.forEach { address ->
+                        val url = "http://$address:${WifiTransferServer.PORT}"
+                        Surface(
+                            onClick = {
+                                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(url))
+                                copiedUrl = url
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            color = colors.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    url,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.onSurface,
+                                )
+                                Text(
+                                    if (copiedUrl == url) tr("wifi.copied") else "复制",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = colors.primary,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
+                        }
+                    }
+
+                    if (controller.wifiAddresses.isEmpty()) {
+                        Text(
+                            tr("wifi.no_network"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.error,
+                            modifier = Modifier.padding(vertical = 8.dp),
+                        )
+                    }
+
+                    if (hasEmulator) {
+                        Spacer(Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = colors.primaryContainer.copy(alpha = 0.35f),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                tr("wifi.emulator_tip"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.onPrimaryContainer,
+                                modifier = Modifier.padding(12.dp),
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(20.dp))
+                    GlassActionButton(tr("wifi.stop"), controller::stopWifiServer, sheetBackdrop, accent = true)
+                } else {
+                    GlassActionButton(tr("wifi.start"), controller::startWifiServer, sheetBackdrop, accent = true)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+private fun WebDavSheet(controller: AndroidLibraryController, onDismiss: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    var urlDraft by remember { mutableStateOf(controller.webDavSavedUrl) }
+    var userDraft by remember { mutableStateOf(controller.webDavSavedUser) }
+    var passDraft by remember { mutableStateOf(controller.webDavSavedPass) }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = colors.surface,
+    ) {
+        val sheetBackdrop = kyantRememberLayerBackdrop()
+        Box {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(colors.surface)
+                    .kyantLayerBackdrop(sheetBackdrop),
+            )
+            Column(
+                Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(tr("webdav.title"), style = MaterialTheme.typography.headlineSmall)
+                OutlinedTextField(
+                    value = urlDraft,
+                    onValueChange = { urlDraft = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(tr("webdav.url")) },
+                    placeholder = { Text("https://dav.jianguoyun.com/dav/") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                )
+                OutlinedTextField(
+                    value = userDraft,
+                    onValueChange = { userDraft = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(tr("webdav.user")) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                )
+                OutlinedTextField(
+                    value = passDraft,
+                    onValueChange = { passDraft = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(tr("webdav.pass")) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    GlassActionButton(tr("common.cancel"), onDismiss, sheetBackdrop)
+                    Spacer(Modifier.width(8.dp))
+                    GlassActionButton(
+                        tr("webdav.connect"),
+                        { controller.connectWebDav(urlDraft, userDraft, passDraft, "") },
+                        sheetBackdrop,
+                        enabled = urlDraft.isNotBlank(),
+                        accent = true,
+                    )
+                }
+                when {
+                    controller.webdavLoading -> QuietState(tr("webdav.loading"))
+                    controller.webdavEntries.isNotEmpty() -> Column {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            if (controller.webdavPath.isNotEmpty()) {
+                                GlassActionButton(
+                                    tr("webdav.parent"),
+                                    { controller.browseWebDav(webDavParent(controller.webdavPath)) },
+                                    sheetBackdrop,
+                                )
+                            }
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                "/" + controller.webdavPath,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colors.onSurfaceVariant,
+                            )
+                        }
+                        controller.webdavEntries
+                            .filter { it.isFolder || InternalMusicLibrary.isAudioFile(it.name) || it.name.lowercase().endsWith(".lrc") }
+                            .forEach { entry ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            if (entry.isFolder) entry.name + "/" else entry.name,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        if (!entry.isFolder && entry.sizeBytes > 0) {
+                                            Text(
+                                                "%.1f MB".format(entry.sizeBytes / 1048576.0),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = colors.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                    when {
+                                        entry.isFolder -> GlassActionButton(
+                                            tr("webdav.open"),
+                                            { controller.browseWebDav(webDavChild(controller.webdavPath, entry.name)) },
+                                            sheetBackdrop,
+                                        )
+                                        controller.webdavDownloading == entry.name ->
+                                            Text(
+                                                tr("webdav.downloading", entry.name),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = colors.primary,
+                                            )
+                                        else -> GlassActionButton(
+                                            tr("webdav.download"),
+                                            { controller.downloadWebDav(entry) },
+                                            sheetBackdrop,
+                                        )
+                                    }
+                                }
+                            }
                     }
                 }
             }
-            when (controller.loginMethod) {
-                AndroidLoginMethod.CAPTCHA -> CaptchaLogin(controller)
-                AndroidLoginMethod.PASSWORD -> PasswordLogin(controller)
-                AndroidLoginMethod.QR_CODE -> QrLogin(controller)
-            }
-            controller.loginMessage?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (it == tr("login.captcha.sent")) colors.primary else colors.error,
-                )
-            }
-            Spacer(Modifier.height(16.dp))
         }
     }
 }
 
-@Composable
-private fun CaptchaLogin(controller: AndroidGatewayController) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        PhoneField(controller.loginPhone, controller::updateLoginPhone)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                controller.loginCaptcha, controller::updateLoginCaptcha, Modifier.weight(1f), label = { Text(tr("login.captcha.code")) }, singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-            )
-            Spacer(Modifier.width(10.dp))
-            ThemeTextButton(onClick = controller::sendCaptcha, enabled = !controller.isSendingCaptcha) {
-                Text(if (controller.isSendingCaptcha) tr("login.captcha.sending") else if (controller.captchaSent) tr("login.captcha.resend") else tr("login.captcha.send"))
-            }
-        }
-        ThemeButton(
-            onClick = controller::submitCaptchaLogin,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !controller.isSubmittingLogin,
-        ) { Text(if (controller.isSubmittingLogin) tr("login.submitting") else tr("login.captcha.submit")) }
-    }
-}
+private fun webDavChild(path: String, name: String): String = if (path.isEmpty()) name else "$path/$name"
 
-@Composable
-private fun PasswordLogin(controller: AndroidGatewayController) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        PhoneField(controller.loginPhone, controller::updateLoginPhone)
-        OutlinedTextField(
-            controller.loginPassword, controller::updateLoginPassword, Modifier.fillMaxWidth(), label = { Text(tr("login.pw.password")) }, singleLine = true,
-            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-        )
-        ThemeButton(
-            onClick = controller::submitPasswordLogin,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !controller.isSubmittingLogin,
-        ) { Text(if (controller.isSubmittingLogin) tr("login.submitting") else tr("login.pw.submit")) }
-    }
-}
-
-@Composable
-private fun PhoneField(value: String, onChange: (String) -> Unit) {
-    OutlinedTextField(
-        value, onChange, Modifier.fillMaxWidth(), label = { Text(tr("login.phone")) }, leadingIcon = { Text("+86", style = MaterialTheme.typography.labelLarge) },
-        singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next),
-    )
-}
-
-@Composable
-private fun QrLogin(controller: AndroidGatewayController) {
-    val image = remember(controller.qrImageData) { decodeQrImage(controller.qrImageData) }
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (image != null) {
-            androidx.compose.foundation.Image(image, tr("login.artwork.qr"), Modifier.size(208.dp).clip(RoundedCornerShape(18.dp)))
-        } else {
-            Box(Modifier.size(208.dp).clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-                Text(if (controller.qrState == AndroidQrLoginState.CREATING) tr("login.qr.creating") else tr("login.qr.unavailable"), color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-            }
-        }
-        Text(
-            when (controller.qrState) {
-                AndroidQrLoginState.WAITING_FOR_SCAN -> tr("login.qr.scan.mobile")
-                AndroidQrLoginState.WAITING_FOR_CONFIRMATION -> tr("login.qr.confirm.mobile")
-                AndroidQrLoginState.EXPIRED -> tr("login.qr.expired")
-                AndroidQrLoginState.ERROR -> tr("login.qr.error.mobile")
-                else -> ""
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (controller.qrState == AndroidQrLoginState.EXPIRED || controller.qrState == AndroidQrLoginState.ERROR) {
-            ThemeTextButton(controller::startQrLogin) { Text(tr("login.qr.regenerate")) }
-        }
-    }
-}
-
-private fun decodeQrImage(data: String?): androidx.compose.ui.graphics.ImageBitmap? = runCatching {
-    val encoded = data?.substringAfter("base64,", data).orEmpty()
-    val bytes = Base64.decode(encoded, Base64.DEFAULT)
-    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-}.getOrNull()
+private fun webDavParent(path: String): String = path.substringBeforeLast('/', "")
 
 @Composable
 private fun QuietState(text: String) {
@@ -2445,11 +2997,9 @@ private fun MessageBanner(text: String, modifier: Modifier) {
 }
 
 private fun AndroidRootDestination.icon() = when (this) {
-    AndroidRootDestination.HOME -> Icons.Outlined.Home
-    AndroidRootDestination.DISCOVER -> Icons.Outlined.Explore
-    AndroidRootDestination.SEARCH -> Icons.Outlined.Search
     AndroidRootDestination.LIBRARY -> Icons.Outlined.LibraryMusic
-    AndroidRootDestination.ME -> Icons.Outlined.Person
+    AndroidRootDestination.SEARCH -> Icons.Outlined.Search
+    AndroidRootDestination.SETTINGS -> Icons.Outlined.Settings
 }
 
 @Preview(showBackground = true, widthDp = 393, heightDp = 852)

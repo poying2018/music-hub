@@ -80,7 +80,7 @@ internal object SuperLyricPublisher {
                 ?.toTypedArray()
             val data = SuperLyricData()
                 .setTitle(track.title)
-                .setArtist(track.artist)
+                .setArtist(track.displayArtist)
                 .setAlbum(track.album)
                 .setLyric(
                     if (words != null) {

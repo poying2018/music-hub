@@ -75,7 +75,10 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.uiToolingPreview)
     implementation(libs.coil.compose)
-    implementation(libs.coil.network.ktor3)
+    // Kyant0/AndroidLiquidGlass：液态玻璃渲染引擎（与 VibeUsage 同版本）。
+    implementation("io.github.kyant0:backdrop:2.0.1")
+    // Embedded HTTP server for the WiFi import page.
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
     // Publishes real-time lyrics to the system SuperLyric service.
     implementation("com.github.HChenX:SuperLyricApi:3.4")
     debugImplementation(libs.compose.uiTooling)
@@ -89,10 +92,11 @@ android {
 
     defaultConfig {
         applicationId = "dev.naominet.lazer"
-        minSdk = libs.versions.android.minSdk.get().toInt()
+        // 26 matches SuperLyricApi's floor, so the manifest no longer needs tools:overrideLibrary.
+        minSdk = libs.versions.android.minSdk.get().toInt().coerceAtLeast(26)
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
 
         // CI builds a slimmer APK for a single ABI (e.g. -PlazerAbis=arm64-v8a). Local builds keep
         // every ABI unless the property is supplied.

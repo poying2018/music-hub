@@ -1,23 +1,22 @@
 package dev.naominet.lazer
 
 import android.content.Context
-import dev.naominet.lazer.gateway.AudioQuality
-import dev.naominet.lazer.gateway.DEFAULT_GATEWAY_BASE_URL
-import dev.naominet.lazer.gateway.normalizeGatewayBaseUrl
 
-internal val ANDROID_AUDIO_QUALITY_OPTIONS = listOf(
-    AudioQuality.STANDARD,
-    AudioQuality.HIGHER,
-    AudioQuality.EXHIGH,
-    AudioQuality.LOSSLESS,
-    AudioQuality.HI_RES,
-    AudioQuality.JYMASTER,
-)
+/** Top-level UI skin: VibeUsage-style liquid glass (default) or the original Lazer paper look. */
+enum class AppSkin { GLASS, PAPER }
 
-internal fun parseAndroidAudioQuality(value: String?): AudioQuality =
-    ANDROID_AUDIO_QUALITY_OPTIONS.firstOrNull { it.name == value } ?: AudioQuality.EXHIGH
+/** Appearance mode for the glass skin (VibeUsage semantics). */
+enum class GlassThemeMode { SYSTEM, LIGHT, DARK, AMOLED }
 
-/** App-scoped preferences for Android appearance, playback, and service settings. */
+/** Which track collection the library page shows. */
+enum class MusicSource(val labelKey: String) {
+    DEVICE("source.device"),
+    INTERNAL("source.internal");
+
+    val label: String get() = tr(labelKey)
+}
+
+/** App-scoped preferences for Android appearance and lyric settings. */
 internal class AndroidSettingsStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(
         PREFERENCES_NAME,
@@ -104,24 +103,29 @@ internal class AndroidSettingsStore(context: Context) {
         get() = preferences.getBoolean(KEY_SHOW_FULL_LYRICS, false)
         set(value) = preferences.edit().putBoolean(KEY_SHOW_FULL_LYRICS, value).apply()
 
-    var audioQuality: AudioQuality
-        get() = parseAndroidAudioQuality(preferences.getString(KEY_AUDIO_QUALITY, null))
-        set(value) = preferences.edit().putString(KEY_AUDIO_QUALITY, value.name).apply()
+    var skin: AppSkin
+        get() = if (preferences.getBoolean(KEY_SKIN_GLASS, true)) AppSkin.GLASS else AppSkin.PAPER
+        set(value) = preferences.edit().putBoolean(KEY_SKIN_GLASS, value == AppSkin.GLASS).apply()
 
-    var exclusiveAudio: Boolean
-        get() = preferences.getBoolean(KEY_EXCLUSIVE_AUDIO, false)
-        set(value) = preferences.edit().putBoolean(KEY_EXCLUSIVE_AUDIO, value).apply()
+    var glassThemeMode: GlassThemeMode
+        get() = preferences.getString(KEY_GLASS_THEME_MODE, null)
+            ?.let { name -> runCatching { GlassThemeMode.valueOf(name) }.getOrNull() }
+            // Light by default: the white glass look is the intended first impression.
+            ?: GlassThemeMode.LIGHT
+        set(value) = preferences.edit().putString(KEY_GLASS_THEME_MODE, value.name).apply()
 
-    var gatewayBaseUrl: String
-        get() = normalizeGatewayBaseUrl(
-            preferences.getString(KEY_GATEWAY_BASE_URL, DEFAULT_GATEWAY_BASE_URL).orEmpty(),
-        ) ?: DEFAULT_GATEWAY_BASE_URL
-        set(value) = preferences.edit()
-            .putString(KEY_GATEWAY_BASE_URL, normalizeGatewayBaseUrl(value) ?: DEFAULT_GATEWAY_BASE_URL)
-            .apply()
+    var musicSource: MusicSource
+        get() = preferences.getString(KEY_MUSIC_SOURCE, null)
+            ?.let { name -> runCatching { MusicSource.valueOf(name) }.getOrNull() }
+            ?.takeIf { it == MusicSource.INTERNAL }
+            ?: MusicSource.INTERNAL
+        set(value) = preferences.edit().putString(KEY_MUSIC_SOURCE, value.name).apply()
 
     private companion object {
         const val PREFERENCES_NAME = "lazer.android.settings"
+        const val KEY_SKIN_GLASS = "appearance.skin_glass"
+        const val KEY_GLASS_THEME_MODE = "appearance.glass_theme_mode"
+        const val KEY_MUSIC_SOURCE = "library.music_source"
         const val KEY_DARK_THEME = "appearance.dark"
         const val KEY_SYSTEM_MONET = "appearance.system_monet"
         const val KEY_STYLE = "appearance.style"
@@ -138,8 +142,5 @@ internal class AndroidSettingsStore(context: Context) {
         const val KEY_LYRIC_GLOW_ENABLED = "lyrics.glow_enabled"
         const val KEY_LYRIC_FONT_SIZE_SP = "lyrics.font_size_sp"
         const val KEY_SHOW_FULL_LYRICS = "lyrics.show_full_lines"
-        const val KEY_AUDIO_QUALITY = "playback.audio_quality"
-        const val KEY_EXCLUSIVE_AUDIO = "playback.exclusive_audio"
-        const val KEY_GATEWAY_BASE_URL = "gateway.base_url"
     }
 }

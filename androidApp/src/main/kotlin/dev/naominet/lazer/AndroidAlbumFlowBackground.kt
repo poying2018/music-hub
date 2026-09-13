@@ -1,7 +1,10 @@
 package dev.naominet.lazer
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
+import android.net.Uri
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.tween
@@ -23,12 +26,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -58,9 +60,10 @@ internal fun AndroidAlbumFlowBackground(
 ) {
     var colors by remember { mutableStateOf(DefaultFlowPalette) }
     var phaseSeconds by remember { mutableFloatStateOf(0f) }
+    val context = LocalContext.current
 
     LaunchedEffect(track?.id, track?.coverUrl) {
-        colors = extractAndroidFlowPalette(track?.coverUrl)
+        colors = extractAndroidFlowPalette(context, track?.coverUrl)
     }
     LaunchedEffect(Unit) {
         var lastPublishedNs = 0L
@@ -160,18 +163,30 @@ private fun BoxScope.FlowLayer(
     )
 }
 
-private suspend fun extractAndroidFlowPalette(coverUrl: String?): List<Color> = withContext(Dispatchers.IO) {
+/** Cover art now lives on the device: read the album art URI, falling back to the embedded picture. */
+private suspend fun extractAndroidFlowPalette(context: Context, coverUrl: String?): List<Color> = withContext(Dispatchers.IO) {
     if (coverUrl.isNullOrBlank()) return@withContext DefaultFlowPalette
     runCatching {
-        val connection = URL(coverUrl.toAndroidPaletteArtworkUrl()).openConnection() as HttpURLConnection
-        connection.connectTimeout = 8_000
-        connection.readTimeout = 8_000
-        connection.setRequestProperty("User-Agent", "Lazer/1.0")
-        connection.inputStream.use(BitmapFactory::decodeStream)
-            ?.let(::seedFromBitmap)
-            ?.let(::flowColorsFromSeed)
-            ?: DefaultFlowPalette
+        val bitmap = context.contentResolver.openInputStream(Uri.parse(coverUrl))
+            ?.use(BitmapFactory::decodeStream)
+            ?: loadEmbeddedArtwork(context, coverUrl)
+        bitmap?.let(::seedFromBitmap)?.let(::flowColorsFromSeed) ?: DefaultFlowPalette
     }.getOrDefault(DefaultFlowPalette)
+}
+
+private fun loadEmbeddedArtwork(context: Context, coverUri: String): Bitmap? {
+    // MediaMetadataRetriever is AutoCloseable only from API 29; release manually for lower floors.
+    val retriever = MediaMetadataRetriever()
+    try {
+        retriever.setDataSource(context, Uri.parse(coverUri))
+        return retriever.embeddedPicture?.let { bytes ->
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        }
+    } catch (_: Throwable) {
+        return null
+    } finally {
+        runCatching { retriever.release() }
+    }
 }
 
 private fun seedFromBitmap(bitmap: Bitmap): Color {

@@ -13,6 +13,7 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaMetadata
+import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
@@ -23,9 +24,6 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import androidx.annotation.RequiresApi
-import dev.naominet.lazer.gateway.AudioQuality
-import dev.naominet.lazer.gateway.GatewayConfig
-import dev.naominet.lazer.gateway.NeteaseMusicGateway
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,8 +33,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlin.math.roundToInt
 
 data class AndroidPlaybackSnapshot(
@@ -90,14 +86,6 @@ private object AndroidPlaybackQueue {
         index = (index - 1 + tracks.size) % tracks.size
         return current()
     }
-
-    fun adjacent(): List<AndroidTrack> {
-        if (tracks.size < 2 || index !in tracks.indices) return emptyList()
-        return listOf(
-            tracks[(index + 1) % tracks.size],
-            tracks[(index - 1 + tracks.size) % tracks.size],
-        ).distinctBy(AndroidTrack::id)
-    }
 }
 
 /** Entry point used by Compose controls. Android's media session calls back into the same service. */
@@ -124,13 +112,6 @@ object AndroidPlaybackConnection {
         AndroidPlaybackService.EXTRA_POSITION to positionMillis.coerceAtLeast(0L),
     )
 
-    fun updateExclusiveAudio(context: Context) = dispatch(
-        context,
-        AndroidPlaybackService.ACTION_EXCLUSIVE_AUDIO_CHANGED,
-    )
-
-    fun stopAndClearSession(context: Context) = dispatch(context, AndroidPlaybackService.ACTION_STOP_AND_CLEAR_SESSION)
-
     private fun dispatch(context: Context, action: String, extra: Pair<String, Long>? = null) {
         val intent = Intent(context, AndroidPlaybackService::class.java).setAction(action)
         extra?.let { intent.putExtra(it.first, it.second) }
@@ -148,9 +129,6 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
     private lateinit var mediaSession: MediaSession
     private lateinit var audioManager: AudioManager
     private var audioFocusRequest: AudioFocusRequest? = null
-    private lateinit var gatewaySettings: AndroidSettingsStore
-    private lateinit var gatewaySessionStore: AndroidGatewaySessionStore
-    private lateinit var gateway: NeteaseMusicGateway
     private var player: MediaPlayer? = null
     private var loadingGeneration = 0L
     private var artworkGeneration = 0L
@@ -158,19 +136,6 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
     private var artworkBitmap: Bitmap? = null
     private var wasPlayingBeforeFocusLoss = false
     private var foregroundStarted = false
-    private val streamUrls = object : LinkedHashMap<AndroidStreamCacheKey, AndroidCachedStreamUrl>(
-        STREAM_URL_CACHE_SIZE,
-        0.75f,
-        true,
-    ) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<AndroidStreamCacheKey, AndroidCachedStreamUrl>?): Boolean =
-            size > STREAM_URL_CACHE_SIZE
-    }
-    private val streamUrlPrefetches = mutableSetOf<AndroidStreamCacheKey>()
-    private val mediaRequestHeaders = mapOf(
-        "User-Agent" to "Mozilla/5.0 (Linux; Android ${Build.VERSION.RELEASE}) Lazer/1.0",
-        "Referer" to "https://music.163.com/",
-    )
 
     private val progressReporter = object : Runnable {
         override fun run() {
@@ -185,12 +150,9 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
 
     override fun onCreate() {
         super.onCreate()
-        gatewaySettings = AndroidSettingsStore(applicationContext)
-        gatewaySessionStore = AndroidGatewaySessionStore(applicationContext)
-        gateway = createGateway(gatewaySettings.gatewayBaseUrl)
         audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) createNotificationChannel()
-        mediaSession = MediaSession(this, "Lazer playback").apply {
+        mediaSession = MediaSession(this, "Music Hub playback").apply {
             setFlags(
                 MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or
                     MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS,
@@ -221,9 +183,7 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
             ACTION_NEXT -> playNext()
             ACTION_PREVIOUS -> playPrevious()
             ACTION_SEEK -> seekTo(intent.getLongExtra(EXTRA_POSITION, 0L))
-            ACTION_EXCLUSIVE_AUDIO_CHANGED -> refreshAudioFocusMode()
             ACTION_STOP -> stopPlayback()
-            ACTION_STOP_AND_CLEAR_SESSION -> stopPlayback(clearSession = true)
         }
         return START_NOT_STICKY
     }
@@ -240,7 +200,7 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
                 wasPlayingBeforeFocusLoss = player?.isPlaying == true
-                pauseCurrent(abandonExclusiveFocus = false)
+                pauseCurrent()
             }
         }
     }
@@ -259,23 +219,10 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
             ),
         )
         updateSession(track, isPlaying = false, positionMillis = 0L, isPreparing = true)
-        scope.launch {
-            val url = runCatching {
-                resolveStreamUrl(track.id)
-            }.onFailure { error ->
-                Log.e(TAG, "Gateway failed to resolve audio URL for ${track.id}", error)
-            }.getOrNull()
-            if (generation != loadingGeneration) return@launch
-            if (url.isNullOrBlank()) {
-                publishError(tr("status.track_unplayable"))
-                return@launch
-            }
-            preparePlayer(track, url, generation)
-            prefetchAdjacentStreamUrls()
-        }
+        preparePlayer(track, generation)
     }
 
-    private fun preparePlayer(track: AndroidTrack, url: String, generation: Long) {
+    private fun preparePlayer(track: AndroidTrack, generation: Long) {
         val newPlayer = MediaPlayer().apply {
             setAudioAttributes(playbackAudioAttributes())
             setOnPreparedListener { readyPlayer ->
@@ -284,7 +231,7 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
                     return@setOnPreparedListener
                 }
                 if (!requestAudioFocus()) {
-                    publishError(audioFocusFailureMessage())
+                    publishError(tr("status.audio_fail"))
                     return@setOnPreparedListener
                 }
                 readyPlayer.start()
@@ -308,79 +255,13 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
         }
         player = newPlayer
         runCatching {
-            newPlayer.setDataSource(
-                this@AndroidPlaybackService,
-                Uri.parse(url),
-                mediaRequestHeaders,
-            )
+            newPlayer.setDataSource(this@AndroidPlaybackService, Uri.parse(track.contentUri))
             newPlayer.prepareAsync()
         }.onFailure { error ->
-            Log.e(TAG, "MediaPlayer could not open stream for ${track.id}", error)
+            Log.e(TAG, "MediaPlayer could not open ${track.contentUri}", error)
             if (generation == loadingGeneration) publishError(tr("status.track_unplayable"))
         }
     }
-
-    private suspend fun resolveStreamUrl(
-        trackId: Long,
-        preferredQuality: AudioQuality = gatewaySettings.audioQuality,
-    ): String? {
-        refreshGatewayProvider()
-        val cacheKey = AndroidStreamCacheKey(trackId, preferredQuality)
-        val now = System.currentTimeMillis()
-        streamUrls[cacheKey]
-            ?.takeIf { it.expiresAtMillis > now }
-            ?.let { return it.url }
-        streamUrls.remove(cacheKey)
-
-        val attempts = androidAudioQualityAttempts(cacheKey.quality)
-        attempts.forEach { (quality, unblock) ->
-            val rawUrl = withContext(Dispatchers.IO) {
-                runCatching {
-                    val streams = gateway.songUrls(listOf(trackId), quality = quality, unblock = unblock).data
-                    (streams.firstOrNull { it.id == trackId } ?: streams.firstOrNull())?.url
-                }.onFailure { error ->
-                    Log.w(TAG, "Audio URL attempt failed for $trackId at ${quality.label}", error)
-                }.getOrNull()
-            }
-            normalizedPlaybackUrl(rawUrl)?.let { url ->
-                streamUrls[cacheKey] = AndroidCachedStreamUrl(
-                    url = url,
-                    expiresAtMillis = now + STREAM_URL_CACHE_TTL_MILLIS,
-                )
-                return url
-            }
-        }
-        return null
-    }
-
-    /** Resolve nearby URLs while the current player is buffering, so next/previous skips avoid a round trip. */
-    private fun prefetchAdjacentStreamUrls() {
-        val preferredQuality = gatewaySettings.audioQuality
-        AndroidPlaybackQueue.adjacent().forEach { track ->
-            val cacheKey = AndroidStreamCacheKey(track.id, preferredQuality)
-            val usableCachedUrl = streamUrls[cacheKey]?.expiresAtMillis ?: 0L
-            if (usableCachedUrl > System.currentTimeMillis() || !streamUrlPrefetches.add(cacheKey)) return@forEach
-            scope.launch {
-                try {
-                    resolveStreamUrl(track.id, preferredQuality)
-                } finally {
-                    streamUrlPrefetches.remove(cacheKey)
-                }
-            }
-        }
-    }
-
-    private fun refreshGatewayProvider() {
-        val configuredBaseUrl = gatewaySettings.gatewayBaseUrl
-        if (gateway.config.baseUrl == configuredBaseUrl) return
-        gateway.close()
-        gateway = createGateway(configuredBaseUrl)
-    }
-
-    private fun createGateway(baseUrl: String): NeteaseMusicGateway = NeteaseMusicGateway(
-        config = GatewayConfig(baseUrl = baseUrl),
-        sessionStore = gatewaySessionStore,
-    )
 
     private fun resumeCurrent(requestFocus: Boolean = true) {
         val currentPlayer = player
@@ -389,7 +270,7 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
             return
         }
         if (requestFocus && !requestAudioFocus()) {
-            publishError(audioFocusFailureMessage())
+            publishError(tr("status.audio_fail"))
             return
         }
         runCatching { currentPlayer.start() }.onSuccess {
@@ -400,14 +281,13 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
         }
     }
 
-    private fun pauseCurrent(abandonExclusiveFocus: Boolean = true) {
+    private fun pauseCurrent() {
         player?.let { currentPlayer ->
             runCatching { if (currentPlayer.isPlaying) currentPlayer.pause() }
             publishCurrentState(isPreparing = false, isPlaying = false)
             AndroidPlaybackStateStore.snapshot.value.track?.let { ensureForeground(it, preparing = false) }
         }
         SuperLyricPublisher.stop()
-        if (gatewaySettings.exclusiveAudio && abandonExclusiveFocus) abandonAudioFocus()
     }
 
     private fun seekTo(positionMillis: Long) {
@@ -426,17 +306,14 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
         AndroidPlaybackQueue.previous()?.let(::resolveAndPlay)
     }
 
-    private fun stopPlayback(clearSession: Boolean = false) {
+    private fun stopPlayback() {
         ++loadingGeneration
         ++artworkGeneration
         releasePlayer()
         artworkTrackId = null
         artworkBitmap = null
-        streamUrls.clear()
-        streamUrlPrefetches.clear()
         abandonAudioFocus()
         SuperLyricPublisher.stop()
-        if (clearSession) gateway.clearSession()
         AndroidPlaybackStateStore.update(AndroidPlaybackSnapshot())
         mediaSession.setPlaybackState(
             PlaybackState.Builder().setState(PlaybackState.STATE_STOPPED, 0L, 0f).build(),
@@ -488,8 +365,8 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
         val metadata = MediaMetadata.Builder()
             .putString(MediaMetadata.METADATA_KEY_TITLE, track.title)
             .putString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE, track.title)
-            .putString(MediaMetadata.METADATA_KEY_ARTIST, track.artist)
-            .putString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE, track.artist)
+            .putString(MediaMetadata.METADATA_KEY_ARTIST, track.displayArtist)
+            .putString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE, track.displayArtist)
             .putString(MediaMetadata.METADATA_KEY_ALBUM, track.album)
             .putString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, track.coverUrl)
             .putLong(MediaMetadata.METADATA_KEY_DURATION, track.durationMillis)
@@ -519,14 +396,14 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
         )
     }
 
+    /** Loads cover art from the file's embedded picture, falling back to the MediaStore album art. */
     private fun requestArtwork(track: AndroidTrack) {
         if (artworkTrackId == track.id && artworkBitmap != null) return
-        val url = notificationArtworkUrl(track.coverUrl) ?: return
         val generation = ++artworkGeneration
         artworkTrackId = track.id
         artworkBitmap = null
         scope.launch(Dispatchers.IO) {
-            val bitmap = runCatching { downloadArtwork(url) }
+            val bitmap = runCatching { loadArtwork(track) }
                 .onFailure { error -> Log.w(TAG, "Artwork failed for ${track.id}", error) }
                 .getOrNull()
             withContext(Dispatchers.Main.immediate) {
@@ -546,21 +423,23 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
         }
     }
 
-    private fun downloadArtwork(url: String): Bitmap? {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        return try {
-            connection.connectTimeout = NETWORK_TIMEOUT_MILLIS
-            connection.readTimeout = NETWORK_TIMEOUT_MILLIS
-            connection.instanceFollowRedirects = true
-            mediaRequestHeaders.forEach(connection::setRequestProperty)
-            connection.connect()
-            if (connection.responseCode !in 200..299) return null
-            val decoded = connection.inputStream.use { input -> BitmapFactory.decodeStream(input) }
-                ?: return null
-            decoded.fitInsideNotificationArtwork()
+    private fun loadArtwork(track: AndroidTrack): Bitmap? {
+        // MediaMetadataRetriever is AutoCloseable only from API 29; release manually for lower floors.
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(this, Uri.parse(track.contentUri))
+            retriever.embeddedPicture?.let { bytes ->
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    ?.fitInsideNotificationArtwork()
+                    ?.let { return it }
+            }
         } finally {
-            connection.disconnect()
+            runCatching { retriever.release() }
         }
+        val albumArtUri = track.coverUrl?.takeIf(String::isNotBlank) ?: return null
+        return contentResolver.openInputStream(Uri.parse(albumArtUri))?.use { input ->
+            BitmapFactory.decodeStream(input)
+        }?.fitInsideNotificationArtwork()
     }
 
     private fun ensureForeground(track: AndroidTrack, preparing: Boolean) {
@@ -588,7 +467,6 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
 
     private fun notification(track: AndroidTrack, preparing: Boolean): Notification {
         val isPlaying = AndroidPlaybackStateStore.snapshot.value.isPlaying
-        val playAction = if (isPlaying) ACTION_TOGGLE else ACTION_TOGGLE
         val playIcon = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
         val playLabel = if (isPlaying) tr("player.pause") else tr("player.play")
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -599,14 +477,14 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
         }
             .setSmallIcon(if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play)
             .setContentTitle(track.title)
-            .setContentText(if (preparing) tr("notification.preparing") else track.artist)
+            .setContentText(if (preparing) tr("notification.preparing") else track.displayArtist)
             .setOnlyAlertOnce(true)
             .setOngoing(isPlaying || preparing)
             .setCategory(Notification.CATEGORY_TRANSPORT)
             .setContentIntent(contentIntent())
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .addAction(notificationAction(android.R.drawable.ic_media_previous, tr("player.previous"), ACTION_PREVIOUS))
-            .addAction(notificationAction(playIcon, playLabel, playAction))
+            .addAction(notificationAction(playIcon, playLabel, ACTION_TOGGLE))
             .addAction(notificationAction(android.R.drawable.ic_media_next, tr("player.next"), ACTION_NEXT))
             .setStyle(
                 Notification.MediaStyle()
@@ -636,9 +514,8 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
 
     private fun requestAudioFocus(): Boolean {
         abandonAudioFocus()
-        val focusGain = androidAudioFocusGain(gatewaySettings.exclusiveAudio)
         val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val request = AudioFocusRequest.Builder(focusGain)
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                 .setAudioAttributes(playbackAudioAttributes())
                 .setOnAudioFocusChangeListener(this, handler)
                 .setWillPauseWhenDucked(true)
@@ -647,7 +524,7 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
             audioManager.requestAudioFocus(request)
         } else {
             @Suppress("DEPRECATION")
-            audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC, focusGain)
+            audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
         }
         return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
     }
@@ -662,22 +539,10 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
         }
     }
 
-    private fun refreshAudioFocusMode() {
-        val isPlaying = player?.isPlaying == true
-        abandonAudioFocus()
-        if (isPlaying && !requestAudioFocus()) publishError(audioFocusFailureMessage())
-    }
-
     private fun playbackAudioAttributes(): AudioAttributes = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_MEDIA)
         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
         .build()
-
-    private fun audioFocusFailureMessage(): String = if (gatewaySettings.exclusiveAudio) {
-        tr("status.exclusive_fail")
-    } else {
-        tr("status.audio_fail")
-    }
 
     private fun releasePlayer() {
         handler.removeCallbacks(progressReporter)
@@ -698,7 +563,6 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
         mediaSession.release()
         SuperLyricPublisher.release()
         scope.cancel()
-        gateway.close()
         super.onDestroy()
     }
 
@@ -708,63 +572,13 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
         const val ACTION_NEXT = "dev.naominet.lazer.action.NEXT"
         const val ACTION_PREVIOUS = "dev.naominet.lazer.action.PREVIOUS"
         const val ACTION_SEEK = "dev.naominet.lazer.action.SEEK"
-        const val ACTION_EXCLUSIVE_AUDIO_CHANGED = "dev.naominet.lazer.action.EXCLUSIVE_AUDIO_CHANGED"
         const val ACTION_STOP = "dev.naominet.lazer.action.STOP"
-        const val ACTION_STOP_AND_CLEAR_SESSION = "dev.naominet.lazer.action.STOP_AND_CLEAR_SESSION"
         const val EXTRA_POSITION = "position_millis"
 
         private const val CHANNEL_ID = "lazer.playback"
         private const val NOTIFICATION_ID = 2036
         private const val PROGRESS_UPDATE_MILLIS = 100L
-        private const val NETWORK_TIMEOUT_MILLIS = 10_000
-        private const val STREAM_URL_CACHE_SIZE = 6
-        private const val STREAM_URL_CACHE_TTL_MILLIS = 4 * 60_000L
         private const val TAG = "LazerPlayback"
-    }
-}
-
-private data class AndroidStreamCacheKey(
-    val trackId: Long,
-    val quality: AudioQuality,
-)
-
-private data class AndroidCachedStreamUrl(
-    val url: String,
-    val expiresAtMillis: Long,
-)
-
-internal fun androidAudioFocusGain(exclusiveAudio: Boolean): Int = if (exclusiveAudio) {
-    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE
-} else {
-    AudioManager.AUDIOFOCUS_GAIN
-}
-
-internal fun androidAudioQualityAttempts(preferred: AudioQuality): List<Pair<AudioQuality, Boolean>> {
-    val preferredIndex = ANDROID_AUDIO_QUALITY_OPTIONS.indexOf(preferred)
-        .takeIf { it >= 0 }
-        ?: ANDROID_AUDIO_QUALITY_OPTIONS.indexOf(AudioQuality.EXHIGH)
-    val normalAttempts = ANDROID_AUDIO_QUALITY_OPTIONS
-        .subList(0, preferredIndex + 1)
-        .asReversed()
-        .map { it to false }
-    return normalAttempts + (preferred to true)
-}
-
-internal fun normalizedPlaybackUrl(raw: String?): String? {
-    val value = raw?.trim()?.takeIf(String::isNotBlank) ?: return null
-    return when {
-        value.startsWith("//") -> "https:$value"
-        value.startsWith("http://", ignoreCase = true) -> "https://${value.substringAfter("://")}"
-        value.startsWith("https://", ignoreCase = true) -> value
-        else -> null
-    }
-}
-
-private fun notificationArtworkUrl(raw: String?): String? = normalizedArtworkUrl(raw)?.let { url ->
-    if (url.contains("music.126.net") && !url.contains("param=")) {
-        "$url${if (url.contains('?')) '&' else '?'}param=320y320"
-    } else {
-        url
     }
 }
 

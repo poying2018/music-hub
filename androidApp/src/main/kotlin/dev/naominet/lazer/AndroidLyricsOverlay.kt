@@ -51,6 +51,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.naominet.lazer.ui.glass.GlassBackground
+import dev.naominet.lazer.ui.glass.rememberPageBackdrop
 import kotlinx.coroutines.isActive
 import kotlin.math.roundToInt
 
@@ -69,17 +71,22 @@ internal fun AndroidLyricsPage(
     showFullLyrics: Boolean,
     onBack: () -> Unit,
     onSeek: (Long) -> Unit,
+    useGlassBackground: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val colors = MaterialTheme.colorScheme
     Box(modifier.fillMaxSize()) {
-        AndroidAlbumFlowBackground(
-            track = track,
-            modifier = Modifier.fillMaxSize(),
-            cornerRadius = 0.dp,
-            veil = colors.background.copy(alpha = 0.38f),
-        )
+        if (useGlassBackground) {
+            GlassBackground(rememberPageBackdrop())
+        } else {
+            AndroidAlbumFlowBackground(
+                track = track,
+                modifier = Modifier.fillMaxSize(),
+                cornerRadius = 0.dp,
+                veil = colors.background.copy(alpha = 0.38f),
+            )
+        }
         Column(Modifier.fillMaxSize().safeDrawingPadding()) {
             if (landscape) {
                 Box(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp)) {
