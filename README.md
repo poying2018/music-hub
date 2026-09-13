@@ -1,235 +1,101 @@
-<p align="center">
-  <img src="./newicon.png" alt="Lazer icon" width="128" height="128">
-</p>
-
-<h1 align="center">Lazer</h1>
-
-<p align="center">一个安静、专注的跨平台音乐播放器。</p>
+<h1 align="center">Music Hub</h1>
 
 <p align="center">
-  <strong>Android</strong> · <strong>iOS</strong> · <strong>Desktop</strong>
+  <strong>一个纯粹、精致的 Android 液态玻璃高颜值本地音乐播放器</strong>
 </p>
-
-## 项目简介
-
-Lazer 是一个基于 Kotlin Multiplatform 和 Compose Multiplatform 构建的音乐客户端。项目将界面与核心 Gateway 数据模型放在共享模块中，再通过 Android、iOS 和 JVM Desktop 平台实现播放、持久化和系统集成。
-
-默认连接 [NeteaseCloudMusicApi Enhanced Gateway](https://music.naominet.dev/docs/)，支持配置为自托管或其他兼容 Gateway 地址。
-
-## Screenshot
-
-### 移动端
 
 <p align="center">
-  <img src="./pics/Screenshot_2026-09-06-20-54-13-731_dev.naominet..jpg" alt="Lazer 移动端截图 1" width="240">
-  <img src="./pics/Screenshot_2026-09-06-20-54-39-580_dev.naominet..jpg" alt="Lazer 移动端截图 2" width="240">
-  <img src="./pics/Screenshot_2026-09-06-20-54-48-911_dev.naominet..jpg" alt="Lazer 移动端截图 3" width="240">
+  <img src="https://img.shields.io/badge/Platform-Android-green.svg" alt="Platform">
+  <img src="https://img.shields.io/badge/Language-Kotlin-blue.svg" alt="Language">
+  <img src="https://img.shields.io/badge/UI-Compose%20Multiplatform-purple.svg" alt="UI">
+  <img src="https://img.shields.io/badge/Version-v1.0.0-teal.svg" alt="Version">
+  <img src="https://img.shields.io/badge/License-MIT-orange.svg" alt="License">
 </p>
 
-### 桌面端
+---
 
-<p align="center">
-  <img src="./pics/18ec2b5b-5b6d-4e88-af8a-91400e7afefa.png" alt="Lazer 桌面端截图 1" width="420">
-  <img src="./pics/ef15be70-f979-4e53-97c1-98135e170e6b.png" alt="Lazer 桌面端截图 2" width="420">
-  <img src="./pics/73976c13-a41e-4737-9ed1-7995b852a280.png" alt="Lazer 桌面端截图 3" width="420">
-  <img src="./pics/fd8fbadb-0d38-44e5-a657-325ce6a37acb.png" alt="Lazer 桌面端截图 4" width="420">
-</p>
+## 🌟 项目亮点
 
-## 功能
+Music Hub 专注于打造纯粹、无干扰的本地音乐体验，采用**现代液态玻璃（Liquid Glass）拟真材质与高质感动效**，摆脱流媒体杂乱推荐与广告，让听歌回归纯粹本质。
 
-- 音乐搜索、热门发现和推荐内容浏览
-- 歌单浏览，支持登录后同步个人歌单
-- 歌曲播放、暂停、上一首、下一首、进度跳转和音量控制
-- Android 前台播放服务与通知栏媒体控制
-- Desktop 系统媒体会话与媒体按键控制
-- LRC 歌词解析、翻译歌词合并和播放进度跟随
-- QR 登录、手机号验证码登录、手机号密码登录和邮箱登录
-- 登录状态持久化，退出登录时清理本地会话
-- 歌单、歌曲和音频缓存，优先恢复本地内容再刷新网络数据
-- 浅色/深色主题、Material 3 与 MIUIX 主题引擎切换
-- Desktop 支持 Windows ARM64、Windows x64，以及 macOS/Linux 原生分发格式
+- 💧 **液态玻璃美学**：基于实时层级采样的磨砂玻璃容器、液态弹性开关、高对比度播放控制与流体底部导航栏。
+- 🎵 **应用私有隔离曲库**：音乐存储于应用私有目录，完全独立于系统的 MediaStore，杜绝手机系统相册与录音杂音污染。
+- 🌐 **WiFi 局域网一键传歌**：同一局域网内，电脑/平板浏览器打开手机显示的地址即可拖拽上传歌曲与同名歌词；内置上传队列机制，稳定高效。
+- ☁️ **WebDAV 网盘直连**：支持挂载坚果云、Alist、Nextcloud、群晖 NAS 等私有云存储，云端曲库自由浏览与高速下载。
+- 📁 **多文件与分享导入**：支持从手机本地存储多选导入音频，同名 `.lrc` 歌词文件自动关联。
+- 🎤 **超微歌词与平滑跟随**：毫秒级 LRC 逐行解析、高帧率平滑滚动与动态高亮跟随。
+- ⚡ **现代系统媒体集成**：Android 前台播放服务、系统锁屏控制卡片、通知栏媒体控制器，支持音频焦点管理与拔出耳机自动暂停。
 
-## 技术栈
+---
 
-- Kotlin `2.4.10`
-- Kotlin Multiplatform
-- Compose Multiplatform `1.10.3`
-- Compose Material 3
-- Ktor `3.5.2`
-- Kotlinx Serialization
-- Coil 3
-- ZXing（Desktop 二维码生成）
-- JavaMP3（Desktop 音频解码）
-- Nucleus Media Control（Desktop 系统媒体控制）
-- Gradle Wrapper
+## 🎧 支持音频与歌词格式
 
-## 项目结构
+- **音频**：MP3, FLAC, WAV, M4A, OGG, AAC, OPUS
+- **歌词**：LRC 格式（同名歌词文件自动与音频绑定，支持更新覆盖）
 
-```text
-Lazer/
-├── androidApp/                         # Android 应用、播放服务和 Android 平台存储
-├── desktopApp/                         # JVM Desktop 应用、音频播放器和系统媒体控制
-├── iosApp/                             # iOS SwiftUI 入口与 Xcode 工程
-├── shared/                             # 共享 UI、Gateway、数据模型、主题和跨平台逻辑
-│   └── src/
-│       ├── commonMain/                 # 所有平台共享代码
-│       ├── commonTest/                 # 共享单元测试
-│       ├── androidMain/                # Android 网络实现
-│       ├── iosMain/                    # iOS 网络与 Compose 入口
-│       └── jvmMain/                    # Desktop 网络实现
-├── gradle/                             # Version Catalog 与 Gradle 配置
-├── newicon.png                         # 项目图标
-└── run-desktop.bat                     # Windows Desktop 快捷启动脚本
-```
+---
 
-## 环境要求
+## 🛠️ 技术栈
 
-- JDK 11 或更高版本
-- Android Studio（Android 开发与构建）
-- Xcode（仅 macOS，iOS 开发与构建）
-- 可访问的 Gateway 服务
+- **语言**：Kotlin 2.4+
+- **界面框架**：Compose Multiplatform 1.10+ / Jetpack Compose
+- **设计系统**：Material Design 3 + Custom Liquid Glass Backdrop Shader Engine
+- **多媒体**：Android MediaPlayer / MediaSessionCompat
+- **网络传输**：轻量级私有 ServerSocket（带 WiFiLock / WakeLock 保护机制，支持 CORS 与模拟器端口映射）
+- **图片加载**：Coil 3
+- **项目工程**：Gradle 8.11+ / Kotlin Multiplatform
 
-项目使用 Gradle Wrapper，通常不需要单独安装 Gradle。
+---
 
-## 快速开始
+## 🚀 快速开始
 
-### Android
+### 环境要求
+- JDK 17 或更高版本
+- Android SDK 35 (Android 15)
 
-构建 Debug APK：
-
+### 编译 Debug 版本
 ```bash
+# Linux / macOS
 ./gradlew :androidApp:assembleDebug
-```
 
-Windows PowerShell：
-
-```powershell
+# Windows PowerShell
 .\gradlew.bat :androidApp:assembleDebug
 ```
+产物位置：`androidApp/build/outputs/apk/debug/androidApp-debug.apk`
 
-生成的构建产物位于 `androidApp/build/outputs/` 下。
-
-### Desktop
-
-标准运行：
-
+### 编译正式 Release 版本
+在项目根目录配置 `keystore.properties`（参考签名密钥配置）：
+```properties
+storeFile=lazer-release.jks
+storePassword=your_password
+keyAlias=lazer
+keyPassword=your_password
+```
+执行编译：
 ```bash
-./gradlew :desktopApp:run
+.\gradlew.bat :androidApp:assembleRelease
 ```
+产物位置：`androidApp/build/outputs/apk/release/androidApp-release.apk`
 
-Windows ARM64 或 IntelliJ IDEA 中运行：
+---
 
-```bash
-./gradlew :desktopApp:runDesktop
-```
+## 📲 WiFi 传歌使用说明
 
-Windows 也可以直接执行：
+1. 手机连接家庭或办公室 WiFi；
+2. 打开 Music Hub，点击右上角 **「导入音乐」 -> 「WiFi 导入」**；
+3. 点击 **「开启传输服务」**；
+4. 电脑浏览器直接访问手机屏幕上显示的地址（例如 `http://192.168.1.100:8765`）；
+5. 拖拽音频文件（如 `.mp3`, `.flac`）及同名歌词文件（`.lrc`）到网页中即可批量完成导入。
 
-```bat
-run-desktop.bat
-```
+> 💡 **模拟器测试提示**：
+> 若在 Android 模拟器（如 MuMu、AVD）中运行测试，请在宿主机终端执行端口映射：
+> ```bash
+> adb forward tcp:8765 tcp:8765
+> ```
+> 随后在电脑浏览器打开 `http://127.0.0.1:8765` 即可正常传歌。
 
-开发期间启用自动重载：
+---
 
-```bash
-./gradlew :desktopApp:hotRun --auto
-```
+## 📄 许可证
 
-指定 Windows 原生架构：
-
-```bash
-./gradlew :desktopApp:runDesktop -PwindowsArch=x64
-./gradlew :desktopApp:runDesktop -PwindowsArch=arm64
-```
-
-### iOS
-
-iOS 目标仅在 macOS 主机上注册。使用 Xcode 打开 [`iosApp`](./iosApp) 目录，然后选择模拟器或已连接设备运行。
-
-## 测试
-
-运行共享模块的 Android Host 测试：
-
-```bash
-./gradlew :shared:testAndroidHostTest
-```
-
-运行 Desktop/JVM 测试：
-
-```bash
-./gradlew :shared:jvmTest
-./gradlew :desktopApp:test
-```
-
-在 macOS 上运行 iOS Simulator 测试：
-
-```bash
-./gradlew :shared:iosSimulatorArm64Test
-```
-
-## Gateway 配置
-
-默认 Gateway 地址为：
-
-```text
-https://music.naominet.dev
-```
-
-应用设置中可以修改 Gateway 地址。地址支持 `http://` 或 `https://`，也可以省略协议并默认使用 HTTPS。为避免凭据或请求参数泄露，Gateway 地址不能包含：
-
-- 查询参数
-- URL 片段
-- 内嵌用户名和密码
-
-Gateway 请求默认携带 `randomCNIP=true`。只有部署明确提供稳定的中国大陆 `realIP` 时，才应关闭该默认行为。Gateway API 的详细约定请参考[官方文档](https://music.naominet.dev/docs/)。
-
-## 发布构建
-
-### Desktop 分发包
-
-Desktop 配置了以下原生分发格式：
-
-- Windows MSI
-- macOS DMG
-- Linux DEB
-
-构建全部 Desktop 分发包：
-
-```bash
-./gradlew :desktopApp:createDistributable
-```
-
-Windows 图标资源位于 [`desktopApp/src/main/resources/icon.ico`](./desktopApp/src/main/resources/icon.ico)，运行时窗口图标使用 [`icon.png`](./desktopApp/src/main/resources/icon.png)。
-
-### Android Release
-
-Release 构建要求签名配置。可以通过环境变量提供：
-
-```text
-LAZER_KEYSTORE_FILE
-LAZER_KEYSTORE_PASSWORD
-LAZER_KEY_ALIAS
-LAZER_KEY_PASSWORD
-```
-
-也可以在项目根目录创建 `keystore.properties`，字段名对应 `storeFile`、`storePassword`、`keyAlias` 和 `keyPassword`。请勿将真实密钥、密码或签名文件提交到版本库。
-
-## 数据与隐私
-
-- Gateway 登录会话保存在平台私有存储中
-- Android 会话使用 Android Keystore 保护
-- Desktop 会话保存在用户目录下的 `.lazer/state.properties`
-- Desktop 播放日志不会记录音频流 URL、账户信息或凭据
-- Gateway 请求失败时会避免在异常信息中暴露会话 Cookie
-
-## 开发约定
-
-- 共享功能优先放入 `shared` 模块，平台专属能力放入对应的 `androidMain`、`iosMain` 或 `jvmMain`
-- 颜色、排版、间距和交互优先复用 `LazerTheme.kt` 中的设计令牌
-- 用户可见文案使用简洁自然的中文
-- 新增 Gateway 路由、参数或登录行为前，先查阅 [Gateway API 文档](https://music.naominet.dev/docs/)
-- 不要提交 `build/`、本地配置、密钥、密码或发布签名文件
-
-## 许可证
-
-本项目采用 [MIT License](./LICENSE) 开源。 Copyright (c) 2026 Lazer contributors。
+本项目基于 [MIT License](./LICENSE) 开放源代码。
