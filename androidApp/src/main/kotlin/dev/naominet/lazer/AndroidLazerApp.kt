@@ -16,7 +16,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -129,7 +131,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -2315,16 +2320,30 @@ private fun NowPlayingPage(
     val colors = MaterialTheme.colorScheme
     val kashifGlass = rememberLazerLiquidGlass(liquidGlassEnabled, colors.background)
     val glassBackdrop = if (glass) rememberPageBackdrop() else null
+    val animationScope = rememberCoroutineScope()
     val duration = snapshot.durationMillis.takeIf { it > 0L } ?: track.durationMillis
-    val target = if (duration > 0) snapshot.positionMillis.toFloat() / duration else 0f
-    val display by animateFloatAsState(
-        target.coerceIn(0f, 1f),
-        if (snapshot.isPlaying) spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh) else snap(),
-        label = "android-playback-progress",
-    )
-    var seeking by remember(track.id) { mutableStateOf(false) }
-    var seekProgress by remember(track.id) { mutableFloatStateOf(display) }
-    LaunchedEffect(display, seeking) { if (!seeking) seekProgress = display }
+    val target = if (duration > 0) (snapshot.positionMillis.toFloat() / duration).coerceIn(0f, 1f) else 0f
+    val progressAnimatable = remember(track.id) { Animatable(target) }
+    var isSeeking by remember(track.id) { mutableStateOf(false) }
+    var userSeekFraction by remember(track.id) { mutableFloatStateOf(target) }
+
+    LaunchedEffect(target, isSeeking, snapshot.isPlaying) {
+        if (!isSeeking) {
+            val currentVal = progressAnimatable.value
+            val diff = kotlin.math.abs(currentVal - target)
+            if (diff > 0.025f || !snapshot.isPlaying) {
+                progressAnimatable.snapTo(target)
+            } else {
+                progressAnimatable.animateTo(
+                    targetValue = target,
+                    animationSpec = tween(durationMillis = 260, easing = LinearEasing),
+                )
+            }
+        }
+    }
+
+    val activeProgress = if (isSeeking) userSeekFraction else progressAnimatable.value
+    val displayedPositionMillis = (duration * activeProgress).toLong()
 
     // Keep the visual background edge-to-edge; only the controls need to avoid system bars.
     Surface(modifier.fillMaxSize(), color = if (glass) Color.Transparent else colors.background) {
@@ -2374,24 +2393,42 @@ private fun NowPlayingPage(
                         Spacer(Modifier.weight(1f))
                         if (glassBackdrop != null) {
                             LiquidSlider(
-                                value = { seekProgress },
-                                onValueChange = { seeking = true; seekProgress = it },
+                                value = { activeProgress },
+                                onValueChange = {
+                                    isSeeking = true
+                                    userSeekFraction = it
+                                    animationScope.launch { progressAnimatable.snapTo(it) }
+                                },
                                 valueRange = 0f..1f,
                                 visibilityThreshold = 0.0005f,
                                 backdrop = glassBackdrop,
                                 modifier = Modifier.fillMaxWidth(),
-                                onValueChangeFinished = { seeking = false; onSeek((duration * seekProgress).toLong()) },
+                                onValueChangeFinished = {
+                                    val seekTarget = (duration * userSeekFraction).toLong()
+                                    animationScope.launch { progressAnimatable.snapTo(userSeekFraction) }
+                                    isSeeking = false
+                                    onSeek(seekTarget)
+                                },
                             )
                         } else {
                             ThinSeekBar(
-                                progress = seekProgress,
+                                progress = activeProgress,
                                 bufferedProgress = snapshot.bufferedFraction,
-                                onSeek = { seeking = true; seekProgress = it },
-                                onFinished = { seeking = false; onSeek((duration * seekProgress).toLong()) },
+                                onSeek = {
+                                    isSeeking = true
+                                    userSeekFraction = it
+                                    animationScope.launch { progressAnimatable.snapTo(it) }
+                                },
+                                onFinished = {
+                                    val seekTarget = (duration * userSeekFraction).toLong()
+                                    animationScope.launch { progressAnimatable.snapTo(userSeekFraction) }
+                                    isSeeking = false
+                                    onSeek(seekTarget)
+                                },
                             )
                         }
                         Row(Modifier.fillMaxWidth()) {
-                            Text(formatPlaybackTime((duration * seekProgress).toLong()), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+                            Text(formatPlaybackTime(displayedPositionMillis), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
                             Spacer(Modifier.weight(1f))
                             Text(formatPlaybackTime(duration), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
                         }
@@ -2439,7 +2476,7 @@ private fun NowPlayingPage(
                         lines = lyricLines,
                         isLoading = lyricsLoading,
                         message = lyricsMessage,
-                        positionMillis = snapshot.positionMillis,
+                        positionMillis = displayedPositionMillis,
                         followDelayMillis = lyricFollowDelayMillis,
                         animationSpeed = lyricAnimationSpeed,
                         wordLyricsEnabled = wordLyricsEnabled,
@@ -2499,24 +2536,42 @@ private fun NowPlayingPage(
             Spacer(Modifier.height(28.dp))
             if (glassBackdrop != null) {
                 LiquidSlider(
-                    value = { seekProgress },
-                    onValueChange = { seeking = true; seekProgress = it },
+                    value = { activeProgress },
+                    onValueChange = {
+                        isSeeking = true
+                        userSeekFraction = it
+                        animationScope.launch { progressAnimatable.snapTo(it) }
+                    },
                     valueRange = 0f..1f,
                     visibilityThreshold = 0.0005f,
                     backdrop = glassBackdrop,
                     modifier = Modifier.fillMaxWidth(),
-                    onValueChangeFinished = { seeking = false; onSeek((duration * seekProgress).toLong()) },
+                    onValueChangeFinished = {
+                        val seekTarget = (duration * userSeekFraction).toLong()
+                        animationScope.launch { progressAnimatable.snapTo(userSeekFraction) }
+                        isSeeking = false
+                        onSeek(seekTarget)
+                    },
                 )
             } else {
                 ThinSeekBar(
-                    progress = seekProgress,
+                    progress = activeProgress,
                     bufferedProgress = snapshot.bufferedFraction,
-                    onSeek = { seeking = true; seekProgress = it },
-                    onFinished = { seeking = false; onSeek((duration * seekProgress).toLong()) },
+                    onSeek = {
+                        isSeeking = true
+                        userSeekFraction = it
+                        animationScope.launch { progressAnimatable.snapTo(it) }
+                    },
+                    onFinished = {
+                        val seekTarget = (duration * userSeekFraction).toLong()
+                        animationScope.launch { progressAnimatable.snapTo(userSeekFraction) }
+                        isSeeking = false
+                        onSeek(seekTarget)
+                    },
                 )
             }
             Row(Modifier.fillMaxWidth()) {
-                Text(formatPlaybackTime((duration * seekProgress).toLong()), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+                Text(formatPlaybackTime(displayedPositionMillis), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
                 Spacer(Modifier.weight(1f))
                 Text(formatPlaybackTime(duration), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
             }
@@ -2582,18 +2637,20 @@ private fun ThinSeekBar(
     val colors = MaterialTheme.colorScheme
     val fraction = progress.coerceIn(0f, 1f)
     val buffered = maxOf(fraction, bufferedProgress.coerceIn(0f, 1f))
+    val currentOnSeek by rememberUpdatedState(onSeek)
+    val currentOnFinished by rememberUpdatedState(onFinished)
     BoxWithConstraints(
         Modifier.height(20.dp).fillMaxWidth().pointerInput(Unit) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 val width = size.width.coerceAtLeast(1)
-                onSeek((down.position.x / width).coerceIn(0f, 1f)); down.consume()
+                currentOnSeek((down.position.x / width).coerceIn(0f, 1f)); down.consume()
                 while (true) {
                     val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                    onSeek((change.position.x / width).coerceIn(0f, 1f)); change.consume()
+                    currentOnSeek((change.position.x / width).coerceIn(0f, 1f)); change.consume()
                     if (!change.pressed) break
                 }
-                onFinished()
+                currentOnFinished()
             }
         },
         contentAlignment = Alignment.CenterStart,

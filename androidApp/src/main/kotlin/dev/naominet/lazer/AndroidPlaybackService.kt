@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 data class AndroidPlaybackSnapshot(
@@ -106,11 +107,20 @@ object AndroidPlaybackConnection {
 
     fun previous(context: Context) = dispatch(context, AndroidPlaybackService.ACTION_PREVIOUS)
 
-    fun seekTo(context: Context, positionMillis: Long) = dispatch(
-        context,
-        AndroidPlaybackService.ACTION_SEEK,
-        AndroidPlaybackService.EXTRA_POSITION to positionMillis.coerceAtLeast(0L),
-    )
+    fun seekTo(context: Context, positionMillis: Long) {
+        val bounded = positionMillis.coerceAtLeast(0L)
+        val current = AndroidPlaybackStateStore.snapshot.value
+        if (current.track != null) {
+            AndroidPlaybackStateStore.update(
+                current.copy(positionMillis = bounded),
+            )
+        }
+        dispatch(
+            context,
+            AndroidPlaybackService.ACTION_SEEK,
+            AndroidPlaybackService.EXTRA_POSITION to bounded,
+        )
+    }
 
     private fun dispatch(context: Context, action: String, extra: Pair<String, Long>? = null) {
         val intent = Intent(context, AndroidPlaybackService::class.java).setAction(action)
@@ -136,6 +146,7 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
     private var artworkBitmap: Bitmap? = null
     private var wasPlayingBeforeFocusLoss = false
     private var foregroundStarted = false
+    private var pendingSeekPosition: Long? = null
 
     private val progressReporter = object : Runnable {
         override fun run() {
@@ -241,6 +252,10 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
                 handler.post(progressReporter)
             }
             setOnCompletionListener { playNext() }
+            setOnSeekCompleteListener { mp ->
+                pendingSeekPosition = null
+                publishCurrentState(isPreparing = false, isPlaying = mp.isPlaying)
+            }
             setOnBufferingUpdateListener { _, percent ->
                 val snapshot = AndroidPlaybackStateStore.snapshot.value
                 AndroidPlaybackStateStore.update(
@@ -292,7 +307,9 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
 
     private fun seekTo(positionMillis: Long) {
         player?.let { currentPlayer ->
-            val bounded = positionMillis.coerceIn(0L, currentPlayer.duration.coerceAtLeast(0).toLong())
+            val duration = currentPlayer.duration.coerceAtLeast(0).toLong()
+            val bounded = if (duration > 0L) positionMillis.coerceIn(0L, duration) else positionMillis.coerceAtLeast(0L)
+            pendingSeekPosition = bounded
             runCatching { currentPlayer.seekTo(bounded.toInt()) }
             publishCurrentState(isPreparing = false, isPlaying = currentPlayer.isPlaying)
         }
@@ -329,7 +346,18 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
         val duration = runCatching { currentPlayer?.duration?.toLong() }.getOrNull()
             ?.takeIf { it > 0L }
             ?: track.durationMillis
-        val position = runCatching { currentPlayer?.currentPosition?.toLong() }.getOrNull() ?: 0L
+        val rawPosition = runCatching { currentPlayer?.currentPosition?.toLong() }.getOrNull() ?: 0L
+        val pendingSeek = pendingSeekPosition
+        val position = if (pendingSeek != null) {
+            if (abs(rawPosition - pendingSeek) < 600L) {
+                pendingSeekPosition = null
+                rawPosition
+            } else {
+                pendingSeek
+            }
+        } else {
+            rawPosition
+        }
         AndroidPlaybackStateStore.update(
             AndroidPlaybackStateStore.snapshot.value.copy(
                 track = track,
@@ -545,6 +573,7 @@ class AndroidPlaybackService : Service(), AudioManager.OnAudioFocusChangeListene
         .build()
 
     private fun releasePlayer() {
+        pendingSeekPosition = null
         handler.removeCallbacks(progressReporter)
         player?.let { currentPlayer ->
             runCatching { currentPlayer.reset() }

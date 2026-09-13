@@ -1,6 +1,7 @@
 package dev.naominet.lazer.ui.glass
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -20,8 +21,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -103,48 +107,48 @@ fun LiquidSlider(
     }
 
     val trackBackdrop = rememberLayerBackdrop()
+    var isInteracting by remember { mutableStateOf(false) }
+    val currentOnValueChange by rememberUpdatedState(onValueChange)
+    val currentOnValueChangeFinished by rememberUpdatedState(onValueChangeFinished)
 
     BoxWithConstraints(
         modifier
             .fillMaxWidth()
             .height(32f.dp)
             .pointerInput(valueRange, isLtr) {
-                // 整条轨道区域可按可拖（M3 滑杆交互）：
-                // 按下立即播放玻璃按压动效；滑动量达到 touchSlop 即接管手势
-                // （不再区分方向，避免起手轻微竖直抖动被判成滚动导致拖不动），
-                // 值直接取指针横向落点并跟随。
-                val slop = viewConfiguration.touchSlop
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
+                    isInteracting = true
                     dampedDragAnimation.press()
-                    var claimed = false
-                    var acc = Offset.Zero
+                    val width = size.width.coerceAtLeast(1)
+                    val initialFraction = if (isLtr) {
+                        (down.position.x / width).coerceIn(0f, 1f)
+                    } else {
+                        1f - (down.position.x / width).coerceIn(0f, 1f)
+                    }
+                    currentOnValueChange(
+                        valueRange.start + (valueRange.endInclusive - valueRange.start) * initialFraction
+                    )
+                    down.consume()
                     try {
                         while (true) {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
                             if (change.changedToUpIgnoreConsumed()) break
-                            if (!claimed) {
-                                acc += change.positionChangeIgnoreConsumed()
-                                if (abs(acc.x) >= slop || abs(acc.y) >= slop) {
-                                    claimed = true
-                                }
+                            val fraction = if (isLtr) {
+                                (change.position.x / width).coerceIn(0f, 1f)
+                            } else {
+                                1f - (change.position.x / width).coerceIn(0f, 1f)
                             }
-                            if (claimed) {
-                                change.consume()
-                                val fraction = if (isLtr) {
-                                    (change.position.x / size.width).coerceIn(0f, 1f)
-                                } else {
-                                    1f - (change.position.x / size.width).coerceIn(0f, 1f)
-                                }
-                                onValueChange(
-                                    valueRange.start + (valueRange.endInclusive - valueRange.start) * fraction
-                                )
-                            }
+                            currentOnValueChange(
+                                valueRange.start + (valueRange.endInclusive - valueRange.start) * fraction
+                            )
+                            change.consume()
                         }
                     } finally {
+                        isInteracting = false
                         dampedDragAnimation.release()
-                        if (claimed) onValueChangeFinished?.invoke()
+                        currentOnValueChangeFinished?.invoke()
                     }
                 }
             },
@@ -152,22 +156,20 @@ fun LiquidSlider(
     ) {
         val trackWidth = constraints.maxWidth
 
-        // 滑块视觉直接由 value 参数驱动（值变化 → 重组 → spring 动画跟随）。
-        // 不走 DampedDragAnimation 的值通道：snapshotFlow 捕获的是旧组合的
-        // value lambda，参数更新后不会重新求值，导致"值变了滑块不动"。
         val targetProgress = run {
             val v = value().coerceIn(valueRange.start, valueRange.endInclusive)
             (v - valueRange.start) / (valueRange.endInclusive - valueRange.start)
         }
         val animatedProgress by animateFloatAsState(
             targetValue = targetProgress,
-            animationSpec = spring(
+            animationSpec = if (isInteracting) snap() else spring(
                 dampingRatio = 1f,
-                stiffness = 1000f,
+                stiffness = 800f,
                 visibilityThreshold = visibilityThreshold
             ),
             label = "liquidSliderProgress"
         )
+        val visualProgress = if (isInteracting) targetProgress else animatedProgress
 
         Box(Modifier.layerBackdrop(trackBackdrop)) {
             Box(
@@ -185,7 +187,7 @@ fun LiquidSlider(
                     .height(6f.dp)
                     .layout { measurable, constraints ->
                         val placeable = measurable.measure(constraints)
-                        val width = (constraints.maxWidth * animatedProgress).fastRoundToInt()
+                        val width = (constraints.maxWidth * visualProgress).fastRoundToInt()
                         layout(width, placeable.height) {
                             placeable.place(0, 0)
                         }
@@ -199,7 +201,7 @@ fun LiquidSlider(
                 // 手势统一由外层整条轨道区域处理，滑块本体只负责视觉。
                 .offset {
                     val w = 40f.dp.toPx()
-                    val tx = (-w / 2f + trackWidth * animatedProgress)
+                    val tx = (-w / 2f + trackWidth * visualProgress)
                         .fastCoerceIn(-w / 4f, trackWidth - w * 3f / 4f)
                     IntOffset((if (isLtr) tx else -tx).fastRoundToInt(), 0)
                 }
