@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/Platform-Android-green.svg" alt="Platform">
   <img src="https://img.shields.io/badge/Language-Kotlin-blue.svg" alt="Language">
   <img src="https://img.shields.io/badge/UI-Compose%20Multiplatform-purple.svg" alt="UI">
-  <img src="https://img.shields.io/badge/Version-v1.0.0-teal.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-v1.0.1-teal.svg" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-orange.svg" alt="License">
 </p>
 
